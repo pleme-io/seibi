@@ -178,6 +178,49 @@ struct Footer {
     text: String,
 }
 
+// ── Shared status embed builder ─────────────────────────────
+
+/// Build a status embed with system metrics. Used by both `notify` and `monitor`.
+pub fn status_embed(
+    hostname: &str,
+    health: &str,
+    color: u32,
+    description: &str,
+    metrics: &crate::metrics::SystemMetrics,
+) -> EmbedBuilder {
+    EmbedBuilder::new(format!("Status \u{2014} {hostname} \u{2014} {health}"))
+        .description(description)
+        .color(color)
+        .field(
+            "WiFi",
+            format!("{} ({})", metrics.wifi_ssid, metrics.wifi_status),
+            true,
+        )
+        .field("IP", &metrics.ip_address, true)
+        .field("Load", &metrics.load_avg, true)
+        .field(
+            "Memory",
+            format!("{} / {}", metrics.memory_used, metrics.memory_total),
+            true,
+        )
+        .field(
+            "Disk",
+            format!(
+                "{} / {} ({})",
+                metrics.disk_used, metrics.disk_total, metrics.disk_percent
+            ),
+            true,
+        )
+        .field("CPU Temp", &metrics.cpu_temp, true)
+        .field(
+            "Battery",
+            format!("{} ({})", metrics.battery_level, metrics.battery_status),
+            true,
+        )
+        .field("Uptime", &metrics.uptime, true)
+        .footer(format!("{hostname} seibi"))
+}
+
 fn now_rfc3339() -> String {
     time::OffsetDateTime::now_utc()
         .format(&time::format_description::well_known::Rfc3339)

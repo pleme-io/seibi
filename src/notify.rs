@@ -45,44 +45,13 @@ pub async fn run(args: Args) -> Result<ExitCode> {
                 .footer(format!("{} seibi", args.hostname))
         }
 
-        "status" => EmbedBuilder::new(format!(
-            "Status \u{2014} {} \u{2014} {health}",
-            args.hostname,
-        ))
-        .description(
-            args.message
-                .as_deref()
-                .unwrap_or("Periodic health check"),
-        )
-        .color(color)
-        .field(
-            "WiFi",
-            format!("{} ({})", metrics.wifi_ssid, metrics.wifi_status),
-            true,
-        )
-        .field("IP", &metrics.ip_address, true)
-        .field("Load", &metrics.load_avg, true)
-        .field(
-            "Memory",
-            format!("{} / {}", metrics.memory_used, metrics.memory_total),
-            true,
-        )
-        .field(
-            "Disk",
-            format!(
-                "{} / {} ({})",
-                metrics.disk_used, metrics.disk_total, metrics.disk_percent
-            ),
-            true,
-        )
-        .field("CPU Temp", &metrics.cpu_temp, true)
-        .field(
-            "Battery",
-            format!("{} ({})", metrics.battery_level, metrics.battery_status),
-            true,
-        )
-        .field("Uptime", &metrics.uptime, true)
-        .footer(format!("{} seibi", args.hostname)),
+        "status" => webhook::status_embed(
+            &args.hostname,
+            health,
+            color,
+            args.message.as_deref().unwrap_or("Periodic health check"),
+            &metrics,
+        ),
 
         other => {
             let c = webhook::event_color(other);

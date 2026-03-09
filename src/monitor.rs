@@ -8,7 +8,7 @@ use tracing::{info, warn};
 
 use crate::metrics::SystemMetrics;
 use crate::probe::Probe;
-use crate::webhook::{self, EmbedBuilder, Webhook};
+use crate::webhook::{self, Webhook};
 
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Health {
@@ -107,52 +107,23 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
         // Periodic status report with full system metrics
         if args.report_interval > 0 && last_report.elapsed() >= report_interval {
-            send_status_report(&webhook, &args.hostname).await;
+            let metrics = SystemMetrics::collect();
+            let health = metrics.health_assessment();
+            let color = webhook::health_color(health);
+            let embed = webhook::status_embed(
+                &args.hostname,
+                health,
+                color,
+                "Periodic monitoring report",
+                &metrics,
+            );
+
+            if let Err(e) = webhook.send(embed).await {
+                warn!(error = %e, "failed to send status report");
+            }
             last_report = std::time::Instant::now();
         }
 
         time::sleep(probe_interval).await;
-    }
-}
-
-async fn send_status_report(webhook: &Webhook, hostname: &str) {
-    let metrics = SystemMetrics::collect();
-    let health = metrics.health_assessment();
-    let color = webhook::health_color(health);
-
-    let embed = EmbedBuilder::new(format!(
-        "Status \u{2014} {hostname} \u{2014} {health}"
-    ))
-    .description("Periodic monitoring report")
-    .color(color)
-    .field(
-        "WiFi",
-        format!("{} ({})", metrics.wifi_ssid, metrics.wifi_status),
-        true,
-    )
-    .field("IP", &metrics.ip_address, true)
-    .field("Load", &metrics.load_avg, true)
-    .field(
-        "Memory",
-        format!("{} / {}", metrics.memory_used, metrics.memory_total),
-        true,
-    )
-    .field(
-        "Disk",
-        format!(
-            "{} / {} ({})",
-            metrics.disk_used, metrics.disk_total, metrics.disk_percent
-        ),
-        true,
-    )
-    .field(
-        "Battery",
-        format!("{} ({})", metrics.battery_level, metrics.battery_status),
-        true,
-    )
-    .footer(format!("{hostname} seibi"));
-
-    if let Err(e) = webhook.send(embed).await {
-        warn!(error = %e, "failed to send status report");
     }
 }

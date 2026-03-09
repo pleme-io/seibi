@@ -100,7 +100,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn read_token(path: &PathBuf) -> Result<String> {
+fn read_token(path: &std::path::Path) -> Result<String> {
     fs::read_to_string(path)
         .map(|s| s.trim().to_owned())
         .with_context(|| format!("reading token from {}", path.display()))
