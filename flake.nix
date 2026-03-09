@@ -1,50 +1,38 @@
 {
   description = "seibi — infrastructure maintenance toolkit";
 
-  inputs.nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
+  nixConfig = {
+    allow-import-from-derivation = true;
+  };
 
-  outputs = { self, nixpkgs, ... }:
-    let
-      systems = [ "x86_64-linux" "aarch64-linux" "aarch64-darwin" "x86_64-darwin" ];
-      eachSystem = f:
-        nixpkgs.lib.genAttrs systems (system:
-          f (import nixpkgs { inherit system; })
-        );
-    in
-    {
-      packages = eachSystem (pkgs: {
-        default = pkgs.rustPlatform.buildRustPackage {
-          pname = "seibi";
-          version = "0.1.0";
-          src = pkgs.lib.cleanSource ./.;
-          cargoLock.lockFile = ./Cargo.lock;
+  inputs = {
+    nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
+    crate2nix.url = "github:nix-community/crate2nix";
+    flake-utils.url = "github:numtide/flake-utils";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    substrate = {
+      url = "github:pleme-io/substrate";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.fenix.follows = "fenix";
+    };
+  };
 
-          buildInputs = pkgs.lib.optionals pkgs.stdenv.hostPlatform.isDarwin (
-            if pkgs ? apple-sdk
-            then [ pkgs.apple-sdk ]
-            else
-              with pkgs.darwin.apple_sdk.frameworks;
-              [ Security SystemConfiguration ]
-          );
-
-          meta.mainProgram = "seibi";
-        };
-      });
-
-      devShells = eachSystem (pkgs: {
-        default = pkgs.mkShellNoCC {
-          packages = with pkgs; [
-            cargo
-            rustc
-            rust-analyzer
-            clippy
-            rustfmt
-          ];
-        };
-      });
-
-      overlays.default = final: prev: {
-        seibi = self.packages.${final.system}.default;
-      };
+  outputs = {
+    self,
+    nixpkgs,
+    crate2nix,
+    flake-utils,
+    substrate,
+    ...
+  }:
+    (import "${substrate}/lib/rust-tool-release-flake.nix" {
+      inherit nixpkgs crate2nix flake-utils;
+    }) {
+      toolName = "seibi";
+      src = self;
+      repo = "pleme-io/seibi";
     };
 }

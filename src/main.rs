@@ -3,13 +3,17 @@ use clap::{Parser, Subcommand};
 use std::process::ExitCode;
 
 mod attic_push;
+mod auto_unlock;
 mod ddns;
+mod deploy_secret;
 mod helm_auth;
 mod kubeconfig;
 mod metrics;
 mod monitor;
 mod notify;
 mod probe;
+mod sops_edit;
+mod sops_key;
 mod webhook;
 
 #[derive(Parser)]
@@ -37,6 +41,14 @@ enum Command {
     Notify(notify::Args),
     /// Run continuous monitoring daemon
     Monitor(monitor::Args),
+    /// Deploy a secret file with correct permissions and ownership
+    DeploySecret(deploy_secret::Args),
+    /// Manage SOPS age key (sync from 1Password / clean)
+    SopsKey(sops_key::Args),
+    /// Edit SOPS-encrypted secrets (auto-provisions age key)
+    SopsEdit(sops_edit::Args),
+    /// Enroll TPM2 for automatic LUKS unlocking
+    AutoUnlock(auto_unlock::Args),
 }
 
 #[tokio::main]
@@ -61,6 +73,10 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::AtticPush(args) => attic_push::run(args).await,
         Command::Notify(args) => notify::run(args).await,
         Command::Monitor(args) => monitor::run(args).await,
+        Command::DeploySecret(args) => deploy_secret::run(args).await,
+        Command::SopsKey(args) => sops_key::run(args).await,
+        Command::SopsEdit(args) => sops_edit::run(args).await,
+        Command::AutoUnlock(args) => auto_unlock::run(args).await,
     }
 }
 
