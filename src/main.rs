@@ -16,6 +16,7 @@ mod notify;
 mod probe;
 mod sops_edit;
 mod sops_key;
+mod spotlight_sync;
 mod webhook;
 
 #[derive(Parser)]
@@ -55,6 +56,8 @@ enum Command {
     ClusterInit(cluster_init::Args),
     /// Launch a k3s VM with vfkit (provisions seed disk with secrets)
     ClusterLaunch(cluster_launch::Args),
+    /// Sync nix-managed apps to Spotlight via macOS aliases
+    SpotlightSync(spotlight_sync::Args),
 }
 
 #[tokio::main]
@@ -85,6 +88,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::AutoUnlock(args) => auto_unlock::run(args).await,
         Command::ClusterInit(args) => cluster_init::run(args).await,
         Command::ClusterLaunch(args) => cluster_launch::run(args).await,
+        Command::SpotlightSync(args) => spotlight_sync::run(args).await,
     }
 }
 
