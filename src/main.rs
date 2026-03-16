@@ -4,8 +4,6 @@ use std::process::ExitCode;
 
 mod attic_push;
 mod auto_unlock;
-mod cluster_init;
-mod cluster_launch;
 mod ddns;
 mod deploy_secret;
 mod helm_auth;
@@ -52,10 +50,6 @@ enum Command {
     SopsEdit(sops_edit::Args),
     /// Enroll TPM2 for automatic LUKS unlocking
     AutoUnlock(auto_unlock::Args),
-    /// Pre-generate cluster bootstrap secrets (age key, k3s token, admin password)
-    ClusterInit(cluster_init::Args),
-    /// Launch a k3s VM with vfkit (provisions seed disk with secrets)
-    ClusterLaunch(cluster_launch::Args),
     /// Sync nix-managed apps to Spotlight via macOS aliases
     SpotlightSync(spotlight_sync::Args),
 }
@@ -86,8 +80,6 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::SopsKey(args) => sops_key::run(args).await,
         Command::SopsEdit(args) => sops_edit::run(args).await,
         Command::AutoUnlock(args) => auto_unlock::run(args).await,
-        Command::ClusterInit(args) => cluster_init::run(args).await,
-        Command::ClusterLaunch(args) => cluster_launch::run(args).await,
         Command::SpotlightSync(args) => spotlight_sync::run(args).await,
     }
 }
