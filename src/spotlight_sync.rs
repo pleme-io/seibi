@@ -15,7 +15,7 @@ pub struct Args {
     target: String,
 
     /// Force Spotlight re-index after sync
-    #[arg(long, default_value = "true")]
+    #[arg(long)]
     reindex: bool,
 }
 
