@@ -1,5 +1,6 @@
 use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
+use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use tracing::info;
@@ -10,7 +11,7 @@ pub struct Args {
     #[arg(long, default_value = "~/Applications/Home Manager Apps")]
     source: String,
 
-    /// Directory to create macOS aliases in (Spotlight-indexed)
+    /// Directory to create wrapper .app bundles in (Spotlight-indexed)
     #[arg(long, default_value = "~/Applications/Nix")]
     target: String,
 
@@ -28,18 +29,23 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     std::fs::create_dir_all(&target)
         .with_context(|| format!("creating {}", target.display()))?;
 
-    // Remove stale aliases
+    // Remove stale wrapper bundles
     if target.exists() {
         for entry in std::fs::read_dir(&target).context("reading target dir")? {
             let entry = entry?;
-            let _ = std::fs::remove_file(entry.path());
-            let _ = std::fs::remove_dir_all(entry.path());
+            let path = entry.path();
+            let name = entry.file_name().to_string_lossy().to_string();
+            if name.ends_with(".app") {
+                let _ = std::fs::remove_dir_all(&path);
+            } else {
+                let _ = std::fs::remove_file(&path);
+            }
         }
-        info!(target = %target.display(), "cleared stale aliases");
+        info!(target = %target.display(), "cleared stale bundles");
     }
 
-    // Find all .app bundles in source directories
-    let mut app_count = 0;
+    // Find all .app bundles in source directories and create wrapper bundles
+    let mut app_count: u32 = 0;
     let sources = collect_sources(&source, &home);
 
     for src_dir in &sources {
@@ -52,39 +58,43 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
         for entry in entries {
             let entry = entry?;
-            let path = entry.path();
+            let src_path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
 
             if !name.ends_with(".app") {
                 continue;
             }
 
-            // Create macOS alias via osascript (the only reliable way to create
-            // Finder aliases that Spotlight indexes)
-            let status = tokio::process::Command::new("/usr/bin/osascript")
-                .args([
-                    "-e",
-                    &format!(
-                        "tell application \"Finder\" to make alias file to POSIX file \"{}\" at POSIX file \"{}\"",
-                        path.display(),
-                        target.display()
-                    ),
-                ])
-                .stdout(std::process::Stdio::null())
-                .stderr(std::process::Stdio::null())
-                .status()
-                .await
-                .with_context(|| format!("creating alias for {name}"))?;
+            // Resolve the source .app to its real path (follows symlinks)
+            let resolved = std::fs::canonicalize(&src_path)
+                .unwrap_or_else(|_| src_path.clone());
 
-            if status.success() {
-                info!(app = %name, "aliased");
+            if create_wrapper_bundle(&resolved, &target, &name)? {
+                info!(app = %name, "synced");
                 app_count += 1;
             }
         }
     }
 
+    // Register with Launch Services so Spotlight treats them as applications
+    let lsregister = "/System/Library/Frameworks/CoreServices.framework\
+        /Versions/A/Frameworks/LaunchServices.framework\
+        /Versions/A/Support/lsregister";
+
+    for entry in std::fs::read_dir(&target).into_iter().flatten().flatten() {
+        let name = entry.file_name().to_string_lossy().to_string();
+        if name.ends_with(".app") {
+            let _ = tokio::process::Command::new(lsregister)
+                .args(["-f", &entry.path().to_string_lossy()])
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .await;
+        }
+    }
+
     // Force Spotlight to re-index
-    if args.reindex {
+    if args.reindex || app_count > 0 {
         let _ = tokio::process::Command::new("/usr/bin/mdimport")
             .arg(&target)
             .stdout(std::process::Stdio::null())
@@ -96,6 +106,91 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
     info!(count = app_count, "Spotlight sync complete");
     Ok(ExitCode::SUCCESS)
+}
+
+/// Create a real .app wrapper bundle that Spotlight indexes as an application.
+///
+/// Instead of a Finder alias (which Spotlight sees as `com.apple.alias-file`),
+/// this creates a proper `.app` bundle with:
+/// - `Contents/Info.plist` copied from the source
+/// - `Contents/MacOS/<executable>` that execs the original
+///
+/// Spotlight indexes these as `com.apple.application-bundle`.
+fn create_wrapper_bundle(source: &Path, target_dir: &Path, name: &str) -> Result<bool> {
+    let target_app = target_dir.join(name);
+
+    // Read source Info.plist
+    let src_plist = source.join("Contents/Info.plist");
+    if !src_plist.exists() {
+        info!(app = %name, "skipped — no Info.plist");
+        return Ok(false);
+    }
+
+    // Find the executable name from Info.plist
+    let plist_data = std::fs::read_to_string(&src_plist)
+        .with_context(|| format!("reading {}", src_plist.display()))?;
+    let exec_name = extract_plist_value(&plist_data, "CFBundleExecutable")
+        .unwrap_or_else(|| name.trim_end_matches(".app").to_owned());
+
+    // Find the source executable
+    let src_exec = source.join("Contents/MacOS").join(&exec_name);
+    if !src_exec.exists() {
+        info!(app = %name, "skipped — executable not found: {}", exec_name);
+        return Ok(false);
+    }
+
+    // Resolve the source executable to its final target (follow all symlinks)
+    let resolved_exec = std::fs::canonicalize(&src_exec)
+        .unwrap_or_else(|_| src_exec.clone());
+
+    // Create wrapper .app bundle
+    let macos_dir = target_app.join("Contents/MacOS");
+    std::fs::create_dir_all(&macos_dir)
+        .with_context(|| format!("creating {}", macos_dir.display()))?;
+
+    // Copy Info.plist
+    std::fs::copy(&src_plist, target_app.join("Contents/Info.plist"))
+        .with_context(|| format!("copying Info.plist for {name}"))?;
+
+    // Copy icon if present
+    let src_resources = source.join("Contents/Resources");
+    if src_resources.exists() {
+        let tgt_resources = target_app.join("Contents/Resources");
+        let _ = std::fs::create_dir_all(&tgt_resources);
+        // Copy .icns files for Spotlight icon display
+        if let Ok(entries) = std::fs::read_dir(&src_resources) {
+            for entry in entries.flatten() {
+                let fname = entry.file_name().to_string_lossy().to_string();
+                if fname.ends_with(".icns") {
+                    let _ = std::fs::copy(entry.path(), tgt_resources.join(&fname));
+                }
+            }
+        }
+    }
+
+    // Create trampoline executable that execs the real binary
+    let trampoline = macos_dir.join(&exec_name);
+    let script = format!(
+        "#!/bin/bash\nexec \"{}\" \"$@\"\n",
+        resolved_exec.display()
+    );
+    std::fs::write(&trampoline, &script)
+        .with_context(|| format!("writing trampoline for {name}"))?;
+    std::fs::set_permissions(&trampoline, std::fs::Permissions::from_mode(0o755))
+        .with_context(|| format!("chmod trampoline for {name}"))?;
+
+    Ok(true)
+}
+
+/// Extract a string value from a plist XML by key name.
+/// Simple text parser — avoids adding a plist dependency to seibi.
+fn extract_plist_value(xml: &str, key: &str) -> Option<String> {
+    let key_tag = format!("<key>{key}</key>");
+    let pos = xml.find(&key_tag)? + key_tag.len();
+    let rest = &xml[pos..];
+    let start = rest.find("<string>")? + 8;
+    let end = rest[start..].find("</string>")?;
+    Some(rest[start..start + end].to_owned())
 }
 
 fn expand_tilde(path: &str, home: &str) -> PathBuf {
