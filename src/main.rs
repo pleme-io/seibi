@@ -12,6 +12,7 @@ mod metrics;
 mod monitor;
 mod notify;
 mod probe;
+mod rust_cleanup;
 mod sops_edit;
 mod sops_key;
 mod spotlight_sync;
@@ -52,6 +53,8 @@ enum Command {
     AutoUnlock(auto_unlock::Args),
     /// Sync nix-managed apps to Spotlight via macOS aliases
     SpotlightSync(spotlight_sync::Args),
+    /// Clean Rust target/ directories and cargo cache to reclaim disk space
+    RustCleanup(rust_cleanup::Args),
 }
 
 #[tokio::main]
@@ -81,6 +84,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::SopsEdit(args) => sops_edit::run(args).await,
         Command::AutoUnlock(args) => auto_unlock::run(args).await,
         Command::SpotlightSync(args) => spotlight_sync::run(args).await,
+        Command::RustCleanup(args) => rust_cleanup::run(args).await,
     }
 }
 

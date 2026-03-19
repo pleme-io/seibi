@@ -27,6 +27,7 @@ Each subcommand handles a specific operational task.
 | `sops-edit` | Edit SOPS-encrypted secrets (auto-provisions age key) |
 | `auto-unlock` | Enroll TPM2 for automatic LUKS unlocking |
 | `spotlight-sync` | Sync nix-managed apps to Spotlight via macOS aliases |
+| `rust-cleanup` | Clean Rust target/ dirs and cargo cache to reclaim disk space |
 
 ### Removed Commands
 
