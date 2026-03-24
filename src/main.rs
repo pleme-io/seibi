@@ -17,6 +17,7 @@ mod sops_edit;
 mod sops_key;
 mod spotlight_sync;
 mod webhook;
+mod wg_supervisor;
 
 #[derive(Parser)]
 #[command(name = "seibi", version, about = "Infrastructure maintenance toolkit")]
@@ -55,6 +56,8 @@ enum Command {
     SpotlightSync(spotlight_sync::Args),
     /// Clean Rust target/ directories and cargo cache to reclaim disk space
     RustCleanup(rust_cleanup::Args),
+    /// Long-running WireGuard tunnel supervisor (key wait, health, auto-restart)
+    WgSupervisor(wg_supervisor::Args),
 }
 
 #[tokio::main]
@@ -85,6 +88,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::AutoUnlock(args) => auto_unlock::run(args).await,
         Command::SpotlightSync(args) => spotlight_sync::run(args).await,
         Command::RustCleanup(args) => rust_cleanup::run(args).await,
+        Command::WgSupervisor(args) => wg_supervisor::run(args).await,
     }
 }
 
