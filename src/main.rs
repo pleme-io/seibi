@@ -4,6 +4,7 @@ use std::process::ExitCode;
 
 mod attic_push;
 mod auto_unlock;
+mod cluster_secrets;
 mod ddns;
 mod deploy_secret;
 mod helm_auth;
@@ -44,6 +45,8 @@ enum Command {
     Notify(notify::Args),
     /// Run continuous monitoring daemon
     Monitor(monitor::Args),
+    /// Extract cluster bootstrap secrets from SOPS (outputs eval-able exports)
+    ClusterSecrets(cluster_secrets::Args),
     /// Deploy a secret file with correct permissions and ownership
     DeploySecret(deploy_secret::Args),
     /// Manage SOPS age key (sync from 1Password / clean)
@@ -82,6 +85,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::AtticPush(args) => attic_push::run(args).await,
         Command::Notify(args) => notify::run(args).await,
         Command::Monitor(args) => monitor::run(args).await,
+        Command::ClusterSecrets(args) => cluster_secrets::run(args).await,
         Command::DeploySecret(args) => deploy_secret::run(args).await,
         Command::SopsKey(args) => sops_key::run(args).await,
         Command::SopsEdit(args) => sops_edit::run(args).await,
