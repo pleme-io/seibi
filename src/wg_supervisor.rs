@@ -1,6 +1,8 @@
-use anyhow::{bail, Result};
+use anyhow::{bail, Context, Result};
 use clap::Args as ClapArgs;
-use std::path::PathBuf;
+use std::fs;
+use std::os::unix::fs::PermissionsExt;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::time::Duration;
 use tokio::process::Command;
@@ -56,7 +58,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
     // Phase 2: Bring up the tunnel (tear down first if stale interface exists)
     tunnel_down(&args.wg_quick, &args.config).await;
-    tunnel_up(&args.wg_quick, &args.config).await?;
+    tunnel_up(&args.wg_quick, &args.config, &args.key_file).await?;
 
     // Phase 3: Supervision loop — run until signalled
     let mut interval = time::interval(check_interval);
@@ -97,7 +99,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
                     InterfaceStatus::Down => {
                         warn!(interface = %args.interface, "interface down — restarting tunnel");
                         tunnel_down(&args.wg_quick, &args.config).await;
-                        if let Err(e) = tunnel_up(&args.wg_quick, &args.config).await {
+                        if let Err(e) = tunnel_up(&args.wg_quick, &args.config, &args.key_file).await {
                             error!(error = %e, "tunnel restart failed — will retry next interval");
                         }
                     }
@@ -133,12 +135,52 @@ async fn wait_for_key(path: &PathBuf) {
 
 // ── Tunnel lifecycle ────────────────────────────────────────────
 
-async fn tunnel_up(wg_quick: &str, config: &PathBuf) -> Result<()> {
+const PLACEHOLDER: &str = "PLACEHOLDER_REPLACED_BY_POSTUP";
+
+/// Resolve placeholder private key in a WireGuard config.
+/// Returns `Some(resolved_text)` if the placeholder was found and replaced,
+/// `None` if the config has no placeholder (use original config as-is).
+fn resolve_placeholder_key(config_text: &str, key_file: &Path) -> Result<Option<String>> {
+    if !config_text.contains(PLACEHOLDER) {
+        return Ok(None);
+    }
+    let key = fs::read_to_string(key_file)
+        .with_context(|| format!("reading key file {}", key_file.display()))?;
+    Ok(Some(config_text.replace(PLACEHOLDER, key.trim())))
+}
+
+async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()> {
     info!(config = %config.display(), "bringing tunnel up");
+
+    let config_text = fs::read_to_string(config)
+        .with_context(|| format!("reading wg config {}", config.display()))?;
+
+    let effective_config: PathBuf;
+    let mut _cleanup: Option<PathBuf> = None;
+
+    if let Some(resolved) = resolve_placeholder_key(&config_text, key_file)? {
+        let tmp = config.with_extension("tmp");
+        fs::write(&tmp, &resolved)
+            .with_context(|| format!("writing temp config {}", tmp.display()))?;
+        fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
+        info!(tmp = %tmp.display(), "resolved placeholder private key into temp config");
+        effective_config = tmp.clone();
+        _cleanup = Some(tmp);
+    } else {
+        effective_config = config.to_path_buf();
+    }
+
     let output = Command::new(wg_quick)
-        .args(["up", &config.display().to_string()])
+        .args(["up", &effective_config.display().to_string()])
         .output()
         .await?;
+
+    // Clean up temp file regardless of outcome
+    if let Some(ref tmp) = _cleanup {
+        if let Err(e) = fs::remove_file(tmp) {
+            warn!(path = %tmp.display(), error = %e, "failed to remove temp config");
+        }
+    }
 
     if output.status.success() {
         info!("tunnel up");
@@ -314,5 +356,36 @@ mod tests {
             parse_transfer(output),
             Some("1.23 KiB received, 4.56 KiB sent".to_owned())
         );
+    }
+
+    #[test]
+    fn resolve_placeholder_replaces_key() {
+        let dir = std::env::temp_dir().join("seibi-test-resolve");
+        let _ = fs::create_dir_all(&dir);
+        let key_path = dir.join("private.key");
+        fs::write(&key_path, "aBcDeFgHiJkLmNoPqRsTuVwXyZ=\n").unwrap();
+
+        let config = "[Interface]\nPrivateKey = PLACEHOLDER_REPLACED_BY_POSTUP\nAddress = 10.0.0.2/32\n";
+        let result = resolve_placeholder_key(config, &key_path).unwrap();
+        assert!(result.is_some());
+        let resolved = result.unwrap();
+        assert!(resolved.contains("PrivateKey = aBcDeFgHiJkLmNoPqRsTuVwXyZ="));
+        assert!(!resolved.contains("PLACEHOLDER_REPLACED_BY_POSTUP"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_placeholder_returns_none_without_placeholder() {
+        let dir = std::env::temp_dir().join("seibi-test-no-placeholder");
+        let _ = fs::create_dir_all(&dir);
+        let key_path = dir.join("private.key");
+        fs::write(&key_path, "somekey=\n").unwrap();
+
+        let config = "[Interface]\nPrivateKey = aRealKey123=\nAddress = 10.0.0.2/32\n";
+        let result = resolve_placeholder_key(config, &key_path).unwrap();
+        assert!(result.is_none());
+
+        let _ = fs::remove_dir_all(&dir);
     }
 }
