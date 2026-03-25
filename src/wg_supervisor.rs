@@ -137,16 +137,61 @@ async fn wait_for_key(path: &PathBuf) {
 
 const PLACEHOLDER: &str = "PLACEHOLDER_REPLACED_BY_POSTUP";
 
-/// Resolve placeholder private key in a WireGuard config.
-/// Returns `Some(resolved_text)` if the placeholder was found and replaced,
-/// `None` if the config has no placeholder (use original config as-is).
+/// Resolve placeholder private key and PostUp-based secrets in a WireGuard config.
+///
+/// When a config uses `PLACEHOLDER_REPLACED_BY_POSTUP`, it relies on PostUp commands
+/// to inject the real private key and PSK at runtime. On macOS, wg-quick validates
+/// the PrivateKey before PostUp runs, so we must inline everything.
+///
+/// This function:
+/// 1. Replaces the placeholder PrivateKey with the actual key from `key_file`
+/// 2. Strips `PostUp` lines that set `private-key` (no longer needed)
+/// 3. Converts `PostUp = wg set %i peer <pub> preshared-key <path>` into
+///    `PresharedKey = <contents of path>` in the Peer section
+///
+/// Returns `Some(resolved_text)` if changes were made, `None` if no placeholder found.
 fn resolve_placeholder_key(config_text: &str, key_file: &Path) -> Result<Option<String>> {
     if !config_text.contains(PLACEHOLDER) {
         return Ok(None);
     }
     let key = fs::read_to_string(key_file)
         .with_context(|| format!("reading key file {}", key_file.display()))?;
-    Ok(Some(config_text.replace(PLACEHOLDER, key.trim())))
+
+    let mut output = Vec::new();
+    for line in config_text.lines() {
+        let trimmed = line.trim();
+
+        // Replace placeholder PrivateKey
+        if trimmed.starts_with("PrivateKey") && trimmed.contains(PLACEHOLDER) {
+            output.push(format!("PrivateKey = {}", key.trim()));
+            continue;
+        }
+
+        // Strip PostUp that sets private-key (no longer needed)
+        if trimmed.starts_with("PostUp") && trimmed.contains("private-key") {
+            continue;
+        }
+
+        // Convert PostUp preshared-key into inline PresharedKey
+        if trimmed.starts_with("PostUp") && trimmed.contains("preshared-key") {
+            if let Some(psk_path) = trimmed.rsplit("preshared-key").next() {
+                let psk_path = psk_path.trim();
+                match fs::read_to_string(psk_path) {
+                    Ok(psk) => {
+                        output.push(format!("PresharedKey = {}", psk.trim()));
+                        continue;
+                    }
+                    Err(e) => {
+                        warn!(path = psk_path, error = %e, "could not read PSK file, keeping PostUp line");
+                    }
+                }
+            }
+        }
+
+        output.push(line.to_owned());
+    }
+
+    Ok(Some(output.join("\n")))
 }
 
 async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()> {
@@ -362,18 +407,31 @@ mod tests {
     }
 
     #[test]
-    fn resolve_placeholder_replaces_key() {
+    fn resolve_placeholder_replaces_key_and_strips_postup() {
         let dir = std::env::temp_dir().join("seibi-test-resolve");
         let _ = fs::create_dir_all(&dir);
         let key_path = dir.join("private.key");
         fs::write(&key_path, "aBcDeFgHiJkLmNoPqRsTuVwXyZ=\n").unwrap();
+        let psk_path = dir.join("psk");
+        fs::write(&psk_path, "presharedkeyvalue123=\n").unwrap();
 
-        let config = "[Interface]\nPrivateKey = PLACEHOLDER_REPLACED_BY_POSTUP\nAddress = 10.0.0.2/32\n";
-        let result = resolve_placeholder_key(config, &key_path).unwrap();
+        let config = format!(
+            "[Interface]\nPrivateKey = PLACEHOLDER_REPLACED_BY_POSTUP\nAddress = 10.0.0.2/32\n\
+             PostUp = wg set %i private-key {key}\n\n\
+             [Peer]\nPublicKey = ABCD=\nAllowedIPs = 10.0.0.1/32\n\
+             PostUp = wg set %i peer ABCD= preshared-key {psk}\nPersistentKeepalive = 25\n",
+            key = key_path.display(),
+            psk = psk_path.display(),
+        );
+        let result = resolve_placeholder_key(&config, &key_path).unwrap();
         assert!(result.is_some());
         let resolved = result.unwrap();
         assert!(resolved.contains("PrivateKey = aBcDeFgHiJkLmNoPqRsTuVwXyZ="));
         assert!(!resolved.contains("PLACEHOLDER_REPLACED_BY_POSTUP"));
+        // PostUp for private-key should be stripped
+        assert!(!resolved.contains("PostUp"));
+        // PSK should be inlined
+        assert!(resolved.contains("PresharedKey = presharedkeyvalue123="));
 
         let _ = fs::remove_dir_all(&dir);
     }
