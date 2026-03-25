@@ -159,7 +159,10 @@ async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()>
     let mut _cleanup: Option<PathBuf> = None;
 
     if let Some(resolved) = resolve_placeholder_key(&config_text, key_file)? {
-        let tmp = config.with_extension("tmp");
+        // wg-quick derives the interface name from the filename (stem before .conf).
+        // Write to /tmp/<stem>.conf so the interface name matches the original.
+        let filename = config.file_name().unwrap_or_default();
+        let tmp = std::env::temp_dir().join(filename);
         fs::write(&tmp, &resolved)
             .with_context(|| format!("writing temp config {}", tmp.display()))?;
         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
