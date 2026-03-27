@@ -136,43 +136,92 @@ async fn wait_for_key(path: &PathBuf) {
 // ── Tunnel lifecycle ────────────────────────────────────────────
 
 const PLACEHOLDER: &str = "PLACEHOLDER_REPLACED_BY_POSTUP";
+const PSK_MARKER: &str = "# PresharedKeyFile = ";
 
-/// Resolve placeholder private key and PostUp-based secrets in a WireGuard config.
+/// Build a complete wg-quick config with all secrets inlined.
 ///
-/// When a config uses `PLACEHOLDER_REPLACED_BY_POSTUP`, it relies on PostUp commands
-/// to inject the real private key and PSK at runtime. On macOS, wg-quick validates
-/// the PrivateKey before PostUp runs, so we must inline everything.
+/// macOS wg-quick validates PrivateKey before running PostUp, so placeholder
+/// patterns and PostUp-based key injection do not work. This function always
+/// produces a config with real keys inlined, supporting two config formats:
 ///
-/// This function:
-/// 1. Replaces the placeholder PrivateKey with the actual key from `key_file`
-/// 2. Strips `PostUp` lines that set `private-key` (no longer needed)
-/// 3. Converts `PostUp = wg set %i peer <pub> preshared-key <path>` into
-///    `PresharedKey = <contents of path>` in the Peer section
+/// **New format** (no PrivateKey line):
+///   - `# PrivateKeyFile:` comment in [Interface] — signals that the supervisor
+///     must inject PrivateKey from `key_file`.
+///   - `# PresharedKeyFile = /path` comment in [Peer] — resolved to
+///     `PresharedKey = <contents>`.
 ///
-/// Returns `Some(resolved_text)` if changes were made, `None` if no placeholder found.
-fn resolve_placeholder_key(config_text: &str, key_file: &Path) -> Result<Option<String>> {
-    if !config_text.contains(PLACEHOLDER) {
+/// **Legacy format** (backward compat):
+///   - `PrivateKey = PLACEHOLDER_REPLACED_BY_POSTUP` — replaced with real key.
+///   - `PostUp = wg set %i private-key /path` — stripped.
+///   - `PostUp = wg set %i peer <pub> preshared-key /path` — converted to
+///     `PresharedKey = <contents>`.
+///
+/// Returns `Some(resolved_text)` if the config needed resolution (always the
+/// case for both formats), or `None` if the config already has real keys and
+/// needs no modification.
+fn resolve_config(config_text: &str, key_file: &Path) -> Result<Option<String>> {
+    let has_placeholder = config_text.contains(PLACEHOLDER);
+    let has_psk_marker = config_text.contains(PSK_MARKER);
+    let has_privkey_comment = config_text.contains("# PrivateKeyFile:");
+    let has_postup_privkey = config_text.lines().any(|l| {
+        let t = l.trim();
+        t.starts_with("PostUp") && t.contains("private-key")
+    });
+    let has_postup_psk = config_text.lines().any(|l| {
+        let t = l.trim();
+        t.starts_with("PostUp") && t.contains("preshared-key")
+    });
+
+    // Nothing to resolve — config already has real keys
+    if !has_placeholder && !has_psk_marker && !has_privkey_comment
+        && !has_postup_privkey && !has_postup_psk
+    {
         return Ok(None);
     }
+
     let key = fs::read_to_string(key_file)
         .with_context(|| format!("reading key file {}", key_file.display()))?;
 
     let mut output = Vec::new();
+    let mut privkey_injected = false;
+
     for line in config_text.lines() {
         let trimmed = line.trim();
 
-        // Replace placeholder PrivateKey
-        if trimmed.starts_with("PrivateKey") && trimmed.contains(PLACEHOLDER) {
+        // ── New format: inject PrivateKey after the marker comment ──
+        if trimmed.starts_with("# PrivateKeyFile:") {
             output.push(format!("PrivateKey = {}", key.trim()));
+            privkey_injected = true;
             continue;
         }
 
-        // Strip PostUp that sets private-key (no longer needed)
+        // ── New format: resolve PSK marker comment ──
+        if let Some(psk_path) = trimmed.strip_prefix(PSK_MARKER) {
+            let psk_path = psk_path.trim();
+            match fs::read_to_string(psk_path) {
+                Ok(psk) => {
+                    output.push(format!("PresharedKey = {}", psk.trim()));
+                }
+                Err(e) => {
+                    warn!(path = psk_path, error = %e, "could not read PSK file, skipping");
+                }
+            }
+            continue;
+        }
+
+        // ── Legacy: replace placeholder PrivateKey ──
+        if trimmed.starts_with("PrivateKey") && trimmed.contains(PLACEHOLDER) {
+            output.push(format!("PrivateKey = {}", key.trim()));
+            privkey_injected = true;
+            continue;
+        }
+
+        // ── Legacy: strip PostUp that sets private-key ──
         if trimmed.starts_with("PostUp") && trimmed.contains("private-key") {
             continue;
         }
 
-        // Convert PostUp preshared-key into inline PresharedKey
+        // ── Legacy: convert PostUp preshared-key into inline PresharedKey ──
         if trimmed.starts_with("PostUp") && trimmed.contains("preshared-key") {
             if let Some(psk_path) = trimmed.rsplit("preshared-key").next() {
                 let psk_path = psk_path.trim();
@@ -191,6 +240,15 @@ fn resolve_placeholder_key(config_text: &str, key_file: &Path) -> Result<Option<
         output.push(line.to_owned());
     }
 
+    // Safety net: if we found markers but somehow didn't inject PrivateKey
+    // (shouldn't happen, but guard against malformed configs), inject it
+    // after [Interface].
+    if !privkey_injected && (has_privkey_comment || has_placeholder) {
+        if let Some(pos) = output.iter().position(|l| l.trim() == "[Interface]") {
+            output.insert(pos + 1, format!("PrivateKey = {}", key.trim()));
+        }
+    }
+
     Ok(Some(output.join("\n")))
 }
 
@@ -203,7 +261,7 @@ async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()>
     let effective_config: PathBuf;
     let mut _cleanup: Option<PathBuf> = None;
 
-    if let Some(resolved) = resolve_placeholder_key(&config_text, key_file)? {
+    if let Some(resolved) = resolve_config(&config_text, key_file)? {
         // wg-quick derives the interface name from the filename (stem before .conf).
         // Write to /tmp/<stem>.conf so the interface name matches the original.
         let filename = config.file_name().unwrap_or_default();
@@ -211,7 +269,7 @@ async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()>
         fs::write(&tmp, &resolved)
             .with_context(|| format!("writing temp config {}", tmp.display()))?;
         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
-        info!(tmp = %tmp.display(), "resolved placeholder private key into temp config");
+        info!(tmp = %tmp.display(), "resolved config with inlined keys into temp config");
         effective_config = tmp.clone();
         _cleanup = Some(tmp);
     } else {
@@ -407,8 +465,8 @@ mod tests {
     }
 
     #[test]
-    fn resolve_placeholder_replaces_key_and_strips_postup() {
-        let dir = std::env::temp_dir().join("seibi-test-resolve");
+    fn resolve_legacy_placeholder_replaces_key_and_strips_postup() {
+        let dir = std::env::temp_dir().join("seibi-test-resolve-legacy");
         let _ = fs::create_dir_all(&dir);
         let key_path = dir.join("private.key");
         fs::write(&key_path, "aBcDeFgHiJkLmNoPqRsTuVwXyZ=\n").unwrap();
@@ -423,7 +481,7 @@ mod tests {
             key = key_path.display(),
             psk = psk_path.display(),
         );
-        let result = resolve_placeholder_key(&config, &key_path).unwrap();
+        let result = resolve_config(&config, &key_path).unwrap();
         assert!(result.is_some());
         let resolved = result.unwrap();
         assert!(resolved.contains("PrivateKey = aBcDeFgHiJkLmNoPqRsTuVwXyZ="));
@@ -437,14 +495,50 @@ mod tests {
     }
 
     #[test]
-    fn resolve_placeholder_returns_none_without_placeholder() {
-        let dir = std::env::temp_dir().join("seibi-test-no-placeholder");
+    fn resolve_new_format_injects_key_and_psk() {
+        let dir = std::env::temp_dir().join("seibi-test-resolve-new");
+        let _ = fs::create_dir_all(&dir);
+        let key_path = dir.join("private.key");
+        fs::write(&key_path, "NewFormatPrivKey123=\n").unwrap();
+        let psk_path = dir.join("psk");
+        fs::write(&psk_path, "NewFormatPSK456=\n").unwrap();
+
+        let config = format!(
+            "[Interface]\n\
+             # PrivateKeyFile: injected at runtime by wg-supervisor from /some/path\n\
+             Address = 10.0.0.2/32\n\
+             MTU = 1420\n\n\
+             [Peer]\n\
+             PublicKey = ABCD=\n\
+             AllowedIPs = 10.0.0.1/32\n\
+             # PresharedKeyFile = {psk}\n\
+             PersistentKeepalive = 25\n",
+            psk = psk_path.display(),
+        );
+        let result = resolve_config(&config, &key_path).unwrap();
+        assert!(result.is_some());
+        let resolved = result.unwrap();
+        // PrivateKey should be injected (replacing the comment)
+        assert!(resolved.contains("PrivateKey = NewFormatPrivKey123="));
+        assert!(!resolved.contains("# PrivateKeyFile:"));
+        // PSK should be inlined from the marker comment
+        assert!(resolved.contains("PresharedKey = NewFormatPSK456="));
+        assert!(!resolved.contains("# PresharedKeyFile"));
+        // No PostUp lines should exist
+        assert!(!resolved.contains("PostUp"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn resolve_returns_none_without_markers() {
+        let dir = std::env::temp_dir().join("seibi-test-no-markers");
         let _ = fs::create_dir_all(&dir);
         let key_path = dir.join("private.key");
         fs::write(&key_path, "somekey=\n").unwrap();
 
         let config = "[Interface]\nPrivateKey = aRealKey123=\nAddress = 10.0.0.2/32\n";
-        let result = resolve_placeholder_key(config, &key_path).unwrap();
+        let result = resolve_config(config, &key_path).unwrap();
         assert!(result.is_none());
 
         let _ = fs::remove_dir_all(&dir);
