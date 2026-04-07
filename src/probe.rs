@@ -140,4 +140,42 @@ mod tests {
         };
         assert_eq!(probe.name(), "docker.service");
     }
+
+    #[tokio::test]
+    async fn check_ping_detail_contains_target() {
+        let result = check_ping("127.0.0.1").await;
+        assert!(
+            result.detail.contains("127.0.0.1"),
+            "detail should mention target: {}",
+            result.detail
+        );
+    }
+
+    #[tokio::test]
+    async fn check_ping_unreachable_is_unhealthy() {
+        let result = check_ping("192.0.2.1").await;
+        assert!(!result.healthy);
+        assert!(result.detail.contains("192.0.2.1"));
+    }
+
+    #[tokio::test]
+    async fn check_systemd_nonexistent_unit_is_unhealthy() {
+        let result = check_systemd("seibi-nonexistent-unit-12345.service").await;
+        assert!(!result.healthy);
+        assert!(
+            result.detail.contains("inactive") || result.detail.contains("down"),
+            "detail should indicate failure: {}",
+            result.detail
+        );
+    }
+
+    #[test]
+    fn probe_result_fields() {
+        let r = ProbeResult {
+            healthy: true,
+            detail: "all good".into(),
+        };
+        assert!(r.healthy);
+        assert_eq!(r.detail, "all good");
+    }
 }

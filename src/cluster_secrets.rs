@@ -168,6 +168,26 @@ mod tests {
     }
 
     #[test]
+    fn shell_escape_with_newline() {
+        assert_eq!(shell_escape("line1\nline2"), "'line1\nline2'");
+    }
+
+    #[test]
+    fn shell_escape_with_multiple_quotes() {
+        assert_eq!(shell_escape("it's a 'test'"), "'it'\\''s a '\\''test'\\'''");
+    }
+
+    #[test]
+    fn shell_escape_with_spaces() {
+        assert_eq!(shell_escape("hello world"), "'hello world'");
+    }
+
+    #[test]
+    fn shell_escape_with_backslash() {
+        assert_eq!(shell_escape("a\\b"), "'a\\b'");
+    }
+
+    #[test]
     fn sops_path_template_substitution() {
         let template = r#"["clusters"]["{cluster}"]["flux-github-token"]"#;
         let result = template.replace("{cluster}", "akeyless-dev");
@@ -175,5 +195,41 @@ mod tests {
             result,
             r#"["clusters"]["akeyless-dev"]["flux-github-token"]"#
         );
+    }
+
+    #[test]
+    fn secret_defs_all_have_at_least_one_sops_path() {
+        for def in SECRET_DEFS {
+            assert!(
+                !def.sops_paths.is_empty(),
+                "{} has no SOPS paths",
+                def.env_var
+            );
+        }
+    }
+
+    #[test]
+    fn secret_defs_env_vars_are_uppercase() {
+        for def in SECRET_DEFS {
+            assert_eq!(
+                def.env_var,
+                def.env_var.to_uppercase(),
+                "env var should be uppercase: {}",
+                def.env_var
+            );
+        }
+    }
+
+    #[test]
+    fn sops_paths_contain_cluster_placeholder() {
+        for def in SECRET_DEFS {
+            let has_cluster_placeholder = def
+                .sops_paths
+                .iter()
+                .any(|p| p.contains("{cluster}"));
+            if def.env_var == "SOPS_CLUSTER_AGE_KEY" {
+                assert!(has_cluster_placeholder, "SOPS_CLUSTER_AGE_KEY should have {{cluster}} in paths");
+            }
+        }
     }
 }

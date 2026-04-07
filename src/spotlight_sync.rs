@@ -300,4 +300,146 @@ mod tests {
         assert_eq!(sources[0], PathBuf::from("/custom/apps"));
         assert_eq!(sources[1], PathBuf::from("/home/user/Applications"));
     }
+
+    #[test]
+    fn has_app_extension_lowercase() {
+        assert!(has_app_extension("MyApp.app"));
+    }
+
+    #[test]
+    fn has_app_extension_uppercase() {
+        assert!(has_app_extension("MyApp.APP"));
+    }
+
+    #[test]
+    fn has_app_extension_mixed_case() {
+        assert!(has_app_extension("MyApp.App"));
+    }
+
+    #[test]
+    fn has_app_extension_not_app() {
+        assert!(!has_app_extension("MyApp.dmg"));
+        assert!(!has_app_extension("MyApp"));
+        assert!(!has_app_extension(""));
+    }
+
+    #[test]
+    fn has_icns_extension_works() {
+        assert!(has_icns_extension("icon.icns"));
+        assert!(has_icns_extension("icon.ICNS"));
+        assert!(!has_icns_extension("icon.png"));
+        assert!(!has_icns_extension(""));
+    }
+
+    #[test]
+    fn create_wrapper_bundle_creates_trampoline() {
+        let dir = std::env::temp_dir().join("seibi-test-wrapper-bundle");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let src_app = dir.join("source/TestApp.app");
+        let macos_dir = src_app.join("Contents/MacOS");
+        std::fs::create_dir_all(&macos_dir).unwrap();
+
+        let plist = r#"<?xml version="1.0"?>
+<plist>
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>TestApp</string>
+</dict>
+</plist>"#;
+        std::fs::write(src_app.join("Contents/Info.plist"), plist).unwrap();
+        std::fs::write(macos_dir.join("TestApp"), "#!/bin/bash\necho hi").unwrap();
+
+        let target_dir = dir.join("target");
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        let result = create_wrapper_bundle(&src_app, &target_dir, "TestApp.app").unwrap();
+        assert!(result);
+
+        let wrapper = target_dir.join("TestApp.app");
+        assert!(wrapper.join("Contents/Info.plist").exists());
+
+        let trampoline = wrapper.join("Contents/MacOS/TestApp");
+        assert!(trampoline.exists());
+        let content = std::fs::read_to_string(&trampoline).unwrap();
+        assert!(content.starts_with("#!/bin/bash\nexec \""));
+        assert!(content.contains("TestApp"));
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_wrapper_bundle_skips_without_plist() {
+        let dir = std::env::temp_dir().join("seibi-test-wrapper-no-plist");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let src_app = dir.join("source/NoInfo.app/Contents/MacOS");
+        std::fs::create_dir_all(&src_app).unwrap();
+
+        let target_dir = dir.join("target");
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        let result =
+            create_wrapper_bundle(&dir.join("source/NoInfo.app"), &target_dir, "NoInfo.app")
+                .unwrap();
+        assert!(!result);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_wrapper_bundle_skips_without_executable() {
+        let dir = std::env::temp_dir().join("seibi-test-wrapper-no-exec");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let src_app = dir.join("source/NoExec.app");
+        std::fs::create_dir_all(src_app.join("Contents/MacOS")).unwrap();
+
+        let plist = r#"<?xml version="1.0"?>
+<plist><dict>
+    <key>CFBundleExecutable</key>
+    <string>MissingBin</string>
+</dict></plist>"#;
+        std::fs::write(src_app.join("Contents/Info.plist"), plist).unwrap();
+
+        let target_dir = dir.join("target");
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        let result = create_wrapper_bundle(&src_app, &target_dir, "NoExec.app").unwrap();
+        assert!(!result);
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn create_wrapper_bundle_copies_icns_resources() {
+        let dir = std::env::temp_dir().join("seibi-test-wrapper-icns");
+        let _ = std::fs::remove_dir_all(&dir);
+
+        let src_app = dir.join("source/IconApp.app");
+        std::fs::create_dir_all(src_app.join("Contents/MacOS")).unwrap();
+        std::fs::create_dir_all(src_app.join("Contents/Resources")).unwrap();
+
+        let plist = r#"<?xml version="1.0"?>
+<plist><dict>
+    <key>CFBundleExecutable</key>
+    <string>IconApp</string>
+</dict></plist>"#;
+        std::fs::write(src_app.join("Contents/Info.plist"), plist).unwrap();
+        std::fs::write(src_app.join("Contents/MacOS/IconApp"), "#!/bin/bash").unwrap();
+        std::fs::write(src_app.join("Contents/Resources/app.icns"), "fake-icon-data").unwrap();
+        std::fs::write(src_app.join("Contents/Resources/other.png"), "not-copied").unwrap();
+
+        let target_dir = dir.join("target");
+        std::fs::create_dir_all(&target_dir).unwrap();
+
+        let result = create_wrapper_bundle(&src_app, &target_dir, "IconApp.app").unwrap();
+        assert!(result);
+
+        let wrapper = target_dir.join("IconApp.app");
+        assert!(wrapper.join("Contents/Resources/app.icns").exists());
+        assert!(!wrapper.join("Contents/Resources/other.png").exists());
+
+        let _ = std::fs::remove_dir_all(&dir);
+    }
 }

@@ -109,6 +109,11 @@ fn first_global_ip() -> Option<String> {
         .ok()?;
 
     let text = String::from_utf8_lossy(&output.stdout);
+    parse_first_inet_ip(&text)
+}
+
+/// Extract the first `inet` IP address from `ip addr show` output.
+fn parse_first_inet_ip(text: &str) -> Option<String> {
     text.lines().find_map(|line| {
         let trimmed = line.trim();
         trimmed
@@ -121,4 +126,103 @@ fn first_global_ip() -> Option<String> {
 fn set_perms(path: &std::path::Path, mode: u32) -> Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(mode))
         .with_context(|| format!("setting permissions on {}", path.display()))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_first_inet_ip_typical_output() {
+        let output = "\
+2: eth0: <BROADCAST,MULTICAST,UP,LOWER_UP> mtu 1500
+    inet 192.168.1.42/24 brd 192.168.1.255 scope global eth0
+       valid_lft forever preferred_lft forever";
+        assert_eq!(
+            parse_first_inet_ip(output),
+            Some("192.168.1.42".to_owned())
+        );
+    }
+
+    #[test]
+    fn parse_first_inet_ip_multiple_interfaces() {
+        let output = "\
+2: eth0: <UP>
+    inet 10.0.0.1/8 scope global eth0
+3: wlan0: <UP>
+    inet 192.168.1.100/24 scope global wlan0";
+        assert_eq!(parse_first_inet_ip(output), Some("10.0.0.1".to_owned()));
+    }
+
+    #[test]
+    fn parse_first_inet_ip_empty_output() {
+        assert_eq!(parse_first_inet_ip(""), None);
+    }
+
+    #[test]
+    fn parse_first_inet_ip_no_inet_lines() {
+        let output = "\
+2: lo: <LOOPBACK,UP>
+    link/loopback 00:00:00:00:00:00";
+        assert_eq!(parse_first_inet_ip(output), None);
+    }
+
+    #[test]
+    fn parse_first_inet_ip_inet6_ignored() {
+        let output = "    inet6 fe80::1/64 scope link\n    inet 10.0.0.5/24 scope global eth0";
+        assert_eq!(parse_first_inet_ip(output), Some("10.0.0.5".to_owned()));
+    }
+
+    #[test]
+    fn set_perms_creates_and_checks() {
+        let dir = std::env::temp_dir().join("seibi-test-kubeconfig-perms");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let path = dir.join("test-file");
+        fs::write(&path, "content").unwrap();
+
+        set_perms(&path, 0o644).unwrap();
+        let perms = fs::metadata(&path).unwrap().permissions();
+        assert_eq!(perms.mode() & 0o777, 0o644);
+
+        set_perms(&path, 0o600).unwrap();
+        let perms = fs::metadata(&path).unwrap().permissions();
+        assert_eq!(perms.mode() & 0o777, 0o600);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn set_perms_nonexistent_returns_error() {
+        let result = set_perms(std::path::Path::new("/nonexistent/file"), 0o644);
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn wait_for_file_existing_returns_immediately() {
+        let dir = std::env::temp_dir().join("seibi-test-wait-exists");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let path = dir.join("present");
+        fs::write(&path, "ok").unwrap();
+
+        let result = wait_for_file(&path, Duration::from_secs(1)).await;
+        assert!(result.is_ok());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[tokio::test]
+    async fn wait_for_file_missing_times_out() {
+        let result = wait_for_file(
+            std::path::Path::new("/tmp/seibi-nonexistent-file-xxx"),
+            Duration::from_millis(50),
+        )
+        .await;
+        assert!(result.is_err());
+        let msg = format!("{}", result.unwrap_err());
+        assert!(msg.contains("timed out"), "error was: {msg}");
+    }
 }

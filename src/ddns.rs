@@ -163,4 +163,62 @@ mod tests {
         assert!(json.contains("\"ttl\":120"));
         assert!(json.contains("\"proxied\":false"));
     }
+
+    #[test]
+    fn dns_record_proxied_true() {
+        let record = DnsRecord {
+            record_type: "A",
+            name: "proxy.example.com".into(),
+            content: "5.6.7.8".into(),
+            ttl: 1,
+            proxied: true,
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        assert!(json.contains("\"proxied\":true"));
+        assert!(json.contains("\"ttl\":1"));
+    }
+
+    #[test]
+    fn dns_record_roundtrip_json() {
+        let record = DnsRecord {
+            record_type: "A",
+            name: "test.example.com".into(),
+            content: "10.0.0.1".into(),
+            ttl: 300,
+            proxied: false,
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        let parsed: serde_json::Value = serde_json::from_str(&json).unwrap();
+        assert_eq!(parsed["type"], "A");
+        assert_eq!(parsed["name"], "test.example.com");
+        assert_eq!(parsed["content"], "10.0.0.1");
+        assert_eq!(parsed["ttl"], 300);
+        assert_eq!(parsed["proxied"], false);
+    }
+
+    #[test]
+    fn read_token_multiline_takes_first_trimmed() {
+        let dir = std::env::temp_dir().join("seibi-test-ddns-multiline");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let path = dir.join("token");
+        fs::write(&path, "  token-value  \nextra-line\n").unwrap();
+
+        let token = read_token(&path).unwrap();
+        assert_eq!(token, "token-value  \nextra-line");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_token_error_message_includes_path() {
+        let result = read_token(std::path::Path::new("/tmp/seibi-missing-token-abc"));
+        let err = result.unwrap_err();
+        let msg = format!("{err:#}");
+        assert!(
+            msg.contains("/tmp/seibi-missing-token-abc"),
+            "error should mention path: {msg}"
+        );
+    }
 }
