@@ -3093,6 +3093,10 @@ rec {
             packageId = "serde_json";
           }
           {
+            name = "thiserror";
+            packageId = "thiserror";
+          }
+          {
             name = "time";
             packageId = "time";
             features = [ "formatting" ];
