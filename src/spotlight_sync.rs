@@ -207,11 +207,7 @@ fn has_icns_extension(name: &str) -> bool {
 }
 
 fn expand_tilde(path: &str, home: &str) -> PathBuf {
-    if let Some(rest) = path.strip_prefix("~/") {
-        PathBuf::from(home).join(rest)
-    } else {
-        PathBuf::from(path)
-    }
+    crate::common::expand_tilde(path, home)
 }
 
 fn collect_sources(primary: &Path, home: &str) -> Vec<PathBuf> {

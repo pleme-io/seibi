@@ -170,11 +170,7 @@ fn dir_size(dir: &Path) -> u64 {
 }
 
 fn expand_tilde(path: &str, home: &str) -> PathBuf {
-    if let Some(rest) = path.strip_prefix("~/") {
-        PathBuf::from(home).join(rest)
-    } else {
-        PathBuf::from(path)
-    }
+    crate::common::expand_tilde(path, home)
 }
 
 #[cfg(test)]

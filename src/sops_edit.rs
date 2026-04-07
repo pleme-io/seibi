@@ -26,22 +26,11 @@ pub struct Args {
 }
 
 fn default_key_file() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    PathBuf::from(home).join(".config/sops/age/keys.txt")
+    crate::common::default_key_file()
 }
 
 fn find_git_root() -> Option<PathBuf> {
-    let output = std::process::Command::new("git")
-        .args(["rev-parse", "--show-toplevel"])
-        .output()
-        .ok()?;
-    if output.status.success() {
-        Some(PathBuf::from(
-            String::from_utf8_lossy(&output.stdout).trim(),
-        ))
-    } else {
-        None
-    }
+    crate::common::find_git_root()
 }
 
 /// Auto-provision the age key if missing, then exec `sops` to edit the secrets file.

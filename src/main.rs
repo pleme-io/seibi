@@ -2,6 +2,7 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use std::process::ExitCode;
 
+mod common;
 mod attic_push;
 mod auto_unlock;
 mod cluster_secrets;
