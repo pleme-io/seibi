@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
 use reqwest::Client;
 use serde::Serialize;
@@ -6,6 +5,24 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tracing::info;
+
+#[derive(Debug, thiserror::Error)]
+enum DdnsError {
+    #[error("fetching public IP: {0}")]
+    PublicIpFetch(#[source] reqwest::Error),
+
+    #[error("updating Cloudflare DNS: {0}")]
+    CloudflareRequest(#[source] reqwest::Error),
+
+    #[error("Cloudflare API error ({status}): {body}")]
+    CloudflareApi {
+        status: reqwest::StatusCode,
+        body: String,
+    },
+
+    #[error("writing state file: {0}")]
+    StateWrite(#[source] std::io::Error),
+}
 
 #[derive(ClapArgs)]
 pub struct Args {
@@ -41,17 +58,18 @@ struct DnsRecord {
 }
 
 /// Fetch the current public IP and update the Cloudflare DNS record if changed.
-pub async fn run(args: Args) -> Result<ExitCode> {
-    let token = read_token(&args.token_file)?;
+pub async fn run(args: Args) -> Result<ExitCode, anyhow::Error> {
+    let token = crate::common::read_trimmed_file(&args.token_file)?;
     let client = Client::new();
 
     let current_ip = client
         .get("https://api.ipify.org")
         .send()
         .await
-        .context("fetching public IP")?
+        .map_err(DdnsError::PublicIpFetch)?
         .text()
-        .await?
+        .await
+        .map_err(DdnsError::PublicIpFetch)?
         .trim()
         .to_owned();
 
@@ -80,17 +98,18 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         .json(&record)
         .send()
         .await
-        .context("updating Cloudflare DNS")?;
+        .map_err(DdnsError::CloudflareRequest)?;
 
     if !resp.status().is_success() {
+        let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        anyhow::bail!("Cloudflare API error: {body}");
+        return Err(DdnsError::CloudflareApi { status, body }.into());
     }
 
     if let Some(parent) = args.state_file.parent() {
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent).map_err(DdnsError::StateWrite)?;
     }
-    fs::write(&args.state_file, &current_ip)?;
+    fs::write(&args.state_file, &current_ip).map_err(DdnsError::StateWrite)?;
 
     info!(
         old = ?last_ip,
@@ -99,12 +118,6 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         "DNS record updated"
     );
     Ok(ExitCode::SUCCESS)
-}
-
-fn read_token(path: &std::path::Path) -> Result<String> {
-    fs::read_to_string(path)
-        .map(|s| s.trim().to_owned())
-        .with_context(|| format!("reading token from {}", path.display()))
 }
 
 #[cfg(test)]
@@ -120,7 +133,7 @@ mod tests {
         let path = dir.join("token");
         fs::write(&path, "  my-api-token  \n").unwrap();
 
-        let token = read_token(&path).unwrap();
+        let token = crate::common::read_trimmed_file(&path).unwrap();
         assert_eq!(token, "my-api-token");
 
         let _ = fs::remove_dir_all(&dir);
@@ -128,7 +141,7 @@ mod tests {
 
     #[test]
     fn read_token_missing_file_returns_error() {
-        let result = read_token(std::path::Path::new("/nonexistent/token"));
+        let result = crate::common::read_trimmed_file(std::path::Path::new("/nonexistent/token"));
         assert!(result.is_err());
     }
 
@@ -141,10 +154,21 @@ mod tests {
         let path = dir.join("token");
         fs::write(&path, "").unwrap();
 
-        let token = read_token(&path).unwrap();
+        let token = crate::common::read_trimmed_file(&path).unwrap();
         assert_eq!(token, "");
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ddns_error_cloudflare_api_display() {
+        let err = DdnsError::CloudflareApi {
+            status: reqwest::StatusCode::FORBIDDEN,
+            body: "bad token".into(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("403"), "should contain status code: {msg}");
+        assert!(msg.contains("bad token"), "should contain body: {msg}");
     }
 
     #[test]
@@ -205,7 +229,7 @@ mod tests {
         let path = dir.join("token");
         fs::write(&path, "  token-value  \nextra-line\n").unwrap();
 
-        let token = read_token(&path).unwrap();
+        let token = crate::common::read_trimmed_file(&path).unwrap();
         assert_eq!(token, "token-value  \nextra-line");
 
         let _ = fs::remove_dir_all(&dir);
@@ -213,7 +237,8 @@ mod tests {
 
     #[test]
     fn read_token_error_message_includes_path() {
-        let result = read_token(std::path::Path::new("/tmp/seibi-missing-token-abc"));
+        let result =
+            crate::common::read_trimmed_file(std::path::Path::new("/tmp/seibi-missing-token-abc"));
         let err = result.unwrap_err();
         let msg = format!("{err:#}");
         assert!(
