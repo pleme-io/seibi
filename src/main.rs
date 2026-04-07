@@ -5,6 +5,7 @@ use std::process::ExitCode;
 mod attic_push;
 mod auto_unlock;
 mod cluster_secrets;
+mod common;
 mod ddns;
 mod deploy_secret;
 mod helm_auth;

@@ -43,8 +43,7 @@ struct CleanArgs {
 }
 
 fn default_key_file() -> PathBuf {
-    let home = std::env::var("HOME").unwrap_or_else(|_| ".".into());
-    PathBuf::from(home).join(".config/sops/age/keys.txt")
+    crate::common::default_key_file()
 }
 
 pub async fn run(args: Args) -> Result<ExitCode> {

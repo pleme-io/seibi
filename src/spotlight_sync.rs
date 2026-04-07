@@ -194,11 +194,7 @@ fn extract_plist_value(xml: &str, key: &str) -> Option<String> {
 }
 
 fn expand_tilde(path: &str, home: &str) -> PathBuf {
-    if path.starts_with("~/") {
-        PathBuf::from(home).join(&path[2..])
-    } else {
-        PathBuf::from(path)
-    }
+    crate::common::expand_tilde(path, home)
 }
 
 fn collect_sources(primary: &Path, home: &str) -> Vec<PathBuf> {
