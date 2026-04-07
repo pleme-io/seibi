@@ -1,4 +1,4 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use base64::Engine;
 use clap::Args as ClapArgs;
 use serde_json::json;
@@ -28,9 +28,7 @@ pub struct Args {
 }
 
 pub fn run(args: Args) -> Result<ExitCode> {
-    let token = fs::read_to_string(&args.token_file)
-        .with_context(|| format!("reading token from {}", args.token_file.display()))?;
-    let token = token.trim();
+    let token = crate::common::read_trimmed_file(&args.token_file)?;
 
     let auth = base64::engine::general_purpose::STANDARD
         .encode(format!("{}:{token}", args.username));

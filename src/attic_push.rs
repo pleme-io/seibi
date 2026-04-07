@@ -1,6 +1,5 @@
 use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
-use std::fs;
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 use tracing::{info, warn};
@@ -29,13 +28,11 @@ pub struct Args {
 }
 
 pub async fn run(args: Args) -> Result<ExitCode> {
-    let token = fs::read_to_string(&args.token_file)
-        .with_context(|| format!("reading token from {}", args.token_file.display()))?;
-    let token = token.trim();
+    let token = crate::common::read_trimmed_file(&args.token_file)?;
 
     // Login
     let login = Command::new("attic")
-        .args(["login", &args.server_name, &args.cache_url, token])
+        .args(["login", &args.server_name, &args.cache_url, &token])
         .status()
         .context("running attic login")?;
 
