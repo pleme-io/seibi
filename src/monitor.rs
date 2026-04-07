@@ -48,6 +48,7 @@ pub struct Args {
     report_interval: u64,
 }
 
+/// Run the continuous monitoring daemon with periodic probes and reports.
 pub async fn run(args: Args) -> Result<ExitCode> {
     let webhook = Webhook::new(&args.webhook_url, &args.hostname);
 

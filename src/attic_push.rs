@@ -28,6 +28,7 @@ pub struct Args {
     server_name: String,
 }
 
+/// Login to an Attic cache server and push all Nix store paths.
 pub fn run(args: &Args) -> Result<ExitCode> {
     let token = fs::read_to_string(&args.token_file)
         .with_context(|| format!("reading token from {}", args.token_file.display()))?;

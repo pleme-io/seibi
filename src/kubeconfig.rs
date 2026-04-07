@@ -30,6 +30,7 @@ pub struct Args {
     timeout: u64,
 }
 
+/// Wait for k3s.yaml, then export local and remote kubeconfig files.
 pub async fn run(args: Args) -> Result<ExitCode> {
     wait_for_file(&args.k3s_yaml, Duration::from_secs(args.timeout)).await?;
 

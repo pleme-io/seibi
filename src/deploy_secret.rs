@@ -25,6 +25,7 @@ pub struct Args {
     owner: Option<String>,
 }
 
+/// Copy a secret file to its destination with specified permissions and optional ownership.
 pub fn run(args: &Args) -> Result<ExitCode> {
     if let Some(parent) = args.dest.parent() {
         fs::create_dir_all(parent)

@@ -17,6 +17,7 @@ pub struct Args {
     pcrs: String,
 }
 
+/// Interactively enroll TPM2 for automatic LUKS unlocking.
 pub fn run(args: &Args) -> Result<ExitCode> {
     let device = format!("/dev/disk/by-uuid/{}", args.luks_uuid);
     let name = format!("luks-{}", args.luks_uuid);

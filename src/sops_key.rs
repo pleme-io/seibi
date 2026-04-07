@@ -47,6 +47,7 @@ fn default_key_file() -> PathBuf {
     PathBuf::from(home).join(".config/sops/age/keys.txt")
 }
 
+/// Dispatch to sync (provision from 1Password) or clean (remove) subcommand.
 pub async fn run(args: Args) -> Result<ExitCode> {
     match args.command {
         SopsKeyCommand::Sync(a) => run_sync(a).await,

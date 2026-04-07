@@ -5,11 +5,16 @@ use tracing::{info, warn};
 
 // ── Discord embed colors ────────────────────────────────────
 
+/// Discord embed colour for healthy / up events.
 pub const GREEN: u32 = 0x2e_cc71;
+/// Discord embed colour for error / down events.
 pub const RED: u32 = 0xe7_4c3c;
+/// Discord embed colour for warning-level events.
 pub const ORANGE: u32 = 0xe6_7e22;
+/// Discord embed colour for informational events.
 pub const BLUE: u32 = 0x34_98db;
 
+/// Map an event name to a Discord embed colour based on suffix/keyword.
 pub fn event_color(event: &str) -> u32 {
     if event.ends_with("-up") || event == "boot" {
         GREEN
@@ -20,6 +25,7 @@ pub fn event_color(event: &str) -> u32 {
     }
 }
 
+/// Map a health assessment label to a Discord embed colour.
 pub fn health_color(health: &str) -> u32 {
     if health == "Healthy" {
         GREEN
@@ -32,6 +38,7 @@ pub fn health_color(health: &str) -> u32 {
 
 // ── Webhook client ──────────────────────────────────────────
 
+/// Discord webhook client that sends embed-style notifications.
 pub struct Webhook {
     client: Client,
     url: String,
@@ -39,6 +46,7 @@ pub struct Webhook {
 }
 
 impl Webhook {
+    /// Create a webhook client targeting the given Discord webhook URL.
     pub fn new(url: &str, hostname: &str) -> Self {
         Self {
             client: Client::new(),
@@ -47,6 +55,7 @@ impl Webhook {
         }
     }
 
+    /// Send a rich embed to the configured webhook endpoint.
     pub async fn send(&self, embed: EmbedBuilder) -> Result<()> {
         let payload = Payload {
             username: format!("{} monitor", self.hostname),
@@ -70,6 +79,7 @@ impl Webhook {
         Ok(())
     }
 
+    /// Send a simple event notification with automatic colour selection.
     pub async fn event(&self, event: &str, detail: &str) -> Result<()> {
         let embed = EmbedBuilder::new(format!("[{}] {event}", self.hostname))
             .description(detail)
@@ -81,6 +91,7 @@ impl Webhook {
 
 // ── Embed builder ───────────────────────────────────────────
 
+/// Builder for a Discord embed payload with title, description, fields, and footer.
 pub struct EmbedBuilder {
     title: String,
     description: String,
@@ -90,6 +101,7 @@ pub struct EmbedBuilder {
 }
 
 impl EmbedBuilder {
+    /// Create a new embed with the given title; other fields start empty.
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),

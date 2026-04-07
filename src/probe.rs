@@ -1,11 +1,13 @@
 use std::process::Stdio;
 use tokio::process::Command;
 
+/// Outcome of a single health-check probe.
 pub struct ProbeResult {
     pub healthy: bool,
     pub detail: String,
 }
 
+/// A health-check probe that can test network, wifi, or systemd unit status.
 pub enum Probe {
     Ping { target: String },
     Wifi { interface: String },

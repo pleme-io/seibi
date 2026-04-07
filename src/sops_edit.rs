@@ -9,7 +9,7 @@ use tracing::info;
 
 #[derive(ClapArgs)]
 pub struct Args {
-    /// File to edit (default: <git-root>/nix/secrets.yaml)
+    /// File to edit (default: `<git-root>/nix/secrets.yaml`)
     file: Option<PathBuf>,
 
     /// 1Password item reference for age key auto-provisioning
@@ -44,6 +44,7 @@ fn find_git_root() -> Option<PathBuf> {
     }
 }
 
+/// Auto-provision the age key if missing, then exec `sops` to edit the secrets file.
 pub async fn run(args: Args) -> Result<ExitCode> {
     let key_file = args.key_file.unwrap_or_else(default_key_file);
 

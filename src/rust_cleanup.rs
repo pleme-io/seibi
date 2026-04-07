@@ -23,6 +23,7 @@ pub struct Args {
     max_depth: u32,
 }
 
+/// Scan directories for Rust `target/` folders and cargo caches, then remove them.
 pub fn run(args: &Args) -> Result<ExitCode> {
     let home = std::env::var("HOME").context("HOME not set")?;
     let mut total_freed: u64 = 0;

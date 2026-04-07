@@ -98,6 +98,7 @@ fn shell_escape(s: &str) -> String {
     format!("'{}'", s.replace('\'', "'\\''"))
 }
 
+/// Extract cluster bootstrap secrets from a SOPS-encrypted file and print shell exports.
 pub async fn run(args: Args) -> Result<ExitCode> {
     let secrets_file = args.secrets_file.unwrap_or_else(|| {
         let root = find_git_root().unwrap_or_else(|| PathBuf::from("."));

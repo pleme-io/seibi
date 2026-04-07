@@ -40,6 +40,8 @@ pub struct Args {
     handshake_stale: u64,
 }
 
+/// Run the `WireGuard` tunnel supervisor: wait for key, bring up tunnel, then
+/// monitor health and auto-restart on failure.
 pub async fn run(args: Args) -> Result<ExitCode> {
     let check_interval = Duration::from_secs(args.check_interval);
     let handshake_stale = Duration::from_secs(args.handshake_stale);
@@ -145,15 +147,15 @@ const PSK_MARKER: &str = "# PresharedKeyFile = ";
 /// produces a config with real keys inlined, supporting two config formats:
 ///
 /// **New format** (no `PrivateKey` line):
-///   - `# PrivateKeyFile:` comment in [Interface] — signals that the supervisor
+///   - `# PrivateKeyFile:` comment in `[Interface]` — signals that the supervisor
 ///     must inject `PrivateKey` from `key_file`.
-///   - `# PresharedKeyFile = /path` comment in [Peer] — resolved to
+///   - `# PresharedKeyFile = /path` comment in `[Peer]` — resolved to
 ///     `PresharedKey = <contents>`.
 ///
 /// **Legacy format** (backward compat):
 ///   - `PrivateKey = PLACEHOLDER_REPLACED_BY_POSTUP` — replaced with real key.
 ///   - `PostUp = wg set %i private-key /path` — stripped.
-///   - `PostUp = wg set %i peer <pub> preshared-key /path` — converted to
+///   - `PostUp = wg set %i peer <pubkey> preshared-key /path` — converted to
 ///     `PresharedKey = <contents>`.
 ///
 /// Returns `Some(resolved_text)` if the config needed resolution (always the

@@ -27,6 +27,7 @@ pub struct Args {
     output: PathBuf,
 }
 
+/// Generate a Docker/Helm OCI registry auth `config.json` from a token file.
 pub fn run(args: &Args) -> Result<ExitCode> {
     let token = fs::read_to_string(&args.token_file)
         .with_context(|| format!("reading token from {}", args.token_file.display()))?;

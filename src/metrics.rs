@@ -1,3 +1,4 @@
+/// Snapshot of system resource metrics (memory, disk, CPU, battery, network).
 pub struct SystemMetrics {
     pub uptime: String,
     pub load_avg: String,

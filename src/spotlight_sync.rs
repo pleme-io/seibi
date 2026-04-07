@@ -20,6 +20,7 @@ pub struct Args {
     reindex: bool,
 }
 
+/// Sync nix-managed `.app` bundles into a Spotlight-indexed directory.
 pub async fn run(args: Args) -> Result<ExitCode> {
     let home = std::env::var("HOME").context("HOME not set")?;
     let source = expand_tilde(&args.source, &home);

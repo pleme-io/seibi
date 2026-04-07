@@ -40,6 +40,7 @@ struct DnsRecord {
     proxied: bool,
 }
 
+/// Fetch the current public IP and update the Cloudflare DNS record if changed.
 pub async fn run(args: Args) -> Result<ExitCode> {
     let token = read_token(&args.token_file)?;
     let client = Client::new();

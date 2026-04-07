@@ -23,6 +23,7 @@ pub struct Args {
     message: Option<String>,
 }
 
+/// Send a one-shot event notification to a Discord webhook.
 pub async fn run(args: Args) -> Result<ExitCode> {
     let wh = Webhook::new(&args.webhook_url, &args.hostname);
     let metrics = SystemMetrics::collect();
