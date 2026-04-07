@@ -29,7 +29,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     let mut targets_found: u32 = 0;
 
     for raw_path in &args.paths {
-        let base = expand_tilde(raw_path, &home);
+        let base = crate::common::expand_tilde(raw_path, &home);
         if !base.exists() {
             info!(path = %base.display(), "skipping — path does not exist");
             continue;
@@ -170,9 +170,6 @@ fn dir_size(dir: &Path) -> u64 {
     total
 }
 
-fn expand_tilde(path: &str, home: &str) -> PathBuf {
-    crate::common::expand_tilde(path, home)
-}
 
 #[cfg(test)]
 mod tests {
@@ -181,19 +178,19 @@ mod tests {
 
     #[test]
     fn expand_tilde_with_home_prefix() {
-        let result = expand_tilde("~/projects", "/home/alice");
+        let result = crate::common::expand_tilde("~/projects", "/home/alice");
         assert_eq!(result, PathBuf::from("/home/alice/projects"));
     }
 
     #[test]
     fn expand_tilde_absolute_path_unchanged() {
-        let result = expand_tilde("/var/data", "/home/alice");
+        let result = crate::common::expand_tilde("/var/data", "/home/alice");
         assert_eq!(result, PathBuf::from("/var/data"));
     }
 
     #[test]
     fn expand_tilde_relative_path_unchanged() {
-        let result = expand_tilde("relative/path", "/home/alice");
+        let result = crate::common::expand_tilde("relative/path", "/home/alice");
         assert_eq!(result, PathBuf::from("relative/path"));
     }
 

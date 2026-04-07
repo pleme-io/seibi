@@ -42,10 +42,6 @@ struct CleanArgs {
     key_file: Option<PathBuf>,
 }
 
-fn default_key_file() -> PathBuf {
-    crate::common::default_key_file()
-}
-
 pub async fn run(args: Args) -> Result<ExitCode> {
     match args.command {
         SopsKeyCommand::Sync(a) => run_sync(a).await,
@@ -54,7 +50,9 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 }
 
 async fn run_sync(args: SyncArgs) -> Result<ExitCode> {
-    let key_file = args.key_file.unwrap_or_else(default_key_file);
+    let key_file = args
+        .key_file
+        .unwrap_or_else(crate::common::default_key_file);
 
     if let Some(parent) = key_file.parent() {
         fs::create_dir_all(parent)
@@ -82,7 +80,9 @@ async fn run_sync(args: SyncArgs) -> Result<ExitCode> {
 }
 
 fn run_clean(args: CleanArgs) -> Result<ExitCode> {
-    let key_file = args.key_file.unwrap_or_else(default_key_file);
+    let key_file = args
+        .key_file
+        .unwrap_or_else(crate::common::default_key_file);
 
     if key_file.exists() {
         fs::remove_file(&key_file)

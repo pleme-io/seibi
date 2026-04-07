@@ -22,8 +22,8 @@ pub struct Args {
 
 pub async fn run(args: Args) -> Result<ExitCode> {
     let home = std::env::var("HOME").context("HOME not set")?;
-    let source = expand_tilde(&args.source, &home);
-    let target = expand_tilde(&args.target, &home);
+    let source = crate::common::expand_tilde(&args.source, &home);
+    let target = crate::common::expand_tilde(&args.target, &home);
 
     // Create target directory
     std::fs::create_dir_all(&target)
@@ -193,10 +193,6 @@ fn extract_plist_value(xml: &str, key: &str) -> Option<String> {
     Some(rest[start..start + end].to_owned())
 }
 
-fn expand_tilde(path: &str, home: &str) -> PathBuf {
-    crate::common::expand_tilde(path, home)
-}
-
 fn collect_sources(primary: &Path, home: &str) -> Vec<PathBuf> {
     vec![
         primary.to_path_buf(),
@@ -257,25 +253,25 @@ mod tests {
 
     #[test]
     fn expand_tilde_with_home_prefix() {
-        let result = expand_tilde("~/Documents/test", "/home/user");
+        let result = crate::common::expand_tilde("~/Documents/test", "/home/user");
         assert_eq!(result, PathBuf::from("/home/user/Documents/test"));
     }
 
     #[test]
     fn expand_tilde_without_home_prefix() {
-        let result = expand_tilde("/absolute/path", "/home/user");
+        let result = crate::common::expand_tilde("/absolute/path", "/home/user");
         assert_eq!(result, PathBuf::from("/absolute/path"));
     }
 
     #[test]
     fn expand_tilde_only_tilde_slash() {
-        let result = expand_tilde("~/", "/home/user");
+        let result = crate::common::expand_tilde("~/", "/home/user");
         assert_eq!(result, PathBuf::from("/home/user/"));
     }
 
     #[test]
     fn expand_tilde_tilde_without_slash_is_literal() {
-        let result = expand_tilde("~nope", "/home/user");
+        let result = crate::common::expand_tilde("~nope", "/home/user");
         assert_eq!(result, PathBuf::from("~nope"));
     }
 

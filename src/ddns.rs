@@ -61,7 +61,7 @@ struct DnsRecord {
 }
 
 pub async fn run(args: Args) -> Result<ExitCode, anyhow::Error> {
-    let token = read_token(&args.token_file)?;
+    let token = crate::common::read_trimmed_file(&args.token_file)?;
     let client = Client::new();
 
     let current_ip = client
@@ -122,9 +122,6 @@ pub async fn run(args: Args) -> Result<ExitCode, anyhow::Error> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn read_token(path: &std::path::Path) -> anyhow::Result<String> {
-    crate::common::read_trimmed_file(path)
-}
 
 #[cfg(test)]
 mod tests {
@@ -139,7 +136,7 @@ mod tests {
         let path = dir.join("token");
         fs::write(&path, "  my-api-token  \n").unwrap();
 
-        let token = read_token(&path).unwrap();
+        let token = crate::common::read_trimmed_file(&path).unwrap();
         assert_eq!(token, "my-api-token");
 
         let _ = fs::remove_dir_all(&dir);
@@ -147,7 +144,7 @@ mod tests {
 
     #[test]
     fn read_token_missing_file_returns_error() {
-        let result = read_token(std::path::Path::new("/nonexistent/token"));
+        let result = crate::common::read_trimmed_file(std::path::Path::new("/nonexistent/token"));
         assert!(result.is_err());
     }
 
@@ -160,7 +157,7 @@ mod tests {
         let path = dir.join("token");
         fs::write(&path, "").unwrap();
 
-        let token = read_token(&path).unwrap();
+        let token = crate::common::read_trimmed_file(&path).unwrap();
         assert_eq!(token, "");
 
         let _ = fs::remove_dir_all(&dir);

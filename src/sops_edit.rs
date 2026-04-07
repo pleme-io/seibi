@@ -24,16 +24,10 @@ pub struct Args {
     key_file: Option<PathBuf>,
 }
 
-fn default_key_file() -> PathBuf {
-    crate::common::default_key_file()
-}
-
-fn find_git_root() -> Option<PathBuf> {
-    crate::common::find_git_root()
-}
-
 pub async fn run(args: Args) -> Result<ExitCode> {
-    let key_file = args.key_file.unwrap_or_else(default_key_file);
+    let key_file = args
+        .key_file
+        .unwrap_or_else(crate::common::default_key_file);
 
     // Auto-provision age key from 1Password if missing
     if !key_file.exists() {
@@ -64,7 +58,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
     // Resolve target file
     let file = args.file.unwrap_or_else(|| {
-        let root = find_git_root().unwrap_or_else(|| PathBuf::from("."));
+        let root = crate::common::find_git_root().unwrap_or_else(|| PathBuf::from("."));
         root.join("nix/secrets.yaml")
     });
 

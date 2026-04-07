@@ -45,13 +45,6 @@ pub struct Args {
     age_key_file: Option<PathBuf>,
 }
 
-fn default_key_file() -> PathBuf {
-    crate::common::default_key_file()
-}
-
-fn find_git_root() -> Option<PathBuf> {
-    crate::common::find_git_root()
-}
 
 /// Try each SOPS extract path, return the first non-empty value.
 async fn try_extract(
@@ -81,13 +74,9 @@ async fn try_extract(
     None
 }
 
-fn shell_escape(s: &str) -> String {
-    crate::common::shell_escape(s)
-}
-
 pub async fn run(args: Args) -> Result<ExitCode> {
     let secrets_file = args.secrets_file.unwrap_or_else(|| {
-        let root = find_git_root().unwrap_or_else(|| PathBuf::from("."));
+        let root = crate::common::find_git_root().unwrap_or_else(|| PathBuf::from("."));
         root.join("secrets.yaml")
     });
 
@@ -98,7 +87,9 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         );
     }
 
-    let age_key_file = args.age_key_file.unwrap_or_else(default_key_file);
+    let age_key_file = args
+        .age_key_file
+        .unwrap_or_else(crate::common::default_key_file);
 
     if !age_key_file.exists() {
         anyhow::bail!(
@@ -118,7 +109,11 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     for def in SECRET_DEFS {
         match try_extract(&secrets_file, &age_key_file, def.sops_paths, &args.cluster).await {
             Some(value) => {
-                println!("export {}={}", def.env_var, shell_escape(&value));
+                println!(
+                    "export {}={}",
+                    def.env_var,
+                    crate::common::shell_escape(&value)
+                );
                 info!(var = def.env_var, "extracted");
                 extracted += 1;
             }
@@ -142,7 +137,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
+    use crate::common::shell_escape;
 
     #[test]
     fn shell_escape_simple() {
