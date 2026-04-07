@@ -17,7 +17,7 @@ pub struct Args {
     pcrs: String,
 }
 
-pub async fn run(args: Args) -> Result<ExitCode> {
+pub fn run(args: Args) -> Result<ExitCode> {
     let device = format!("/dev/disk/by-uuid/{}", args.luks_uuid);
     let name = format!("luks-{}", args.luks_uuid);
 

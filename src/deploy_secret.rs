@@ -25,7 +25,7 @@ pub struct Args {
     owner: Option<String>,
 }
 
-pub async fn run(args: Args) -> Result<ExitCode> {
+pub fn run(args: Args) -> Result<ExitCode> {
     if let Some(parent) = args.dest.parent() {
         fs::create_dir_all(parent)
             .with_context(|| format!("creating directory {}", parent.display()))?;
@@ -79,13 +79,12 @@ mod tests {
         fs::write(&source, "supersecret").unwrap();
         let dest = dir.join("deployed.txt");
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(run(Args {
+        let result = run(Args {
             source: source.clone(),
             dest: dest.clone(),
             mode: "0600".into(),
             owner: None,
-        }));
+        });
 
         assert!(result.is_ok());
         assert_eq!(fs::read_to_string(&dest).unwrap(), "supersecret");
@@ -105,13 +104,12 @@ mod tests {
         fs::write(&source, "data").unwrap();
         let dest = dir.join("a/b/c/dest.txt");
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(run(Args {
+        let result = run(Args {
             source,
             dest: dest.clone(),
             mode: "0644".into(),
             owner: None,
-        }));
+        });
 
         assert!(result.is_ok());
         assert!(dest.exists());
@@ -131,13 +129,12 @@ mod tests {
         fs::write(&source, "readonly").unwrap();
         let dest = dir.join("dest.txt");
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(run(Args {
+        let result = run(Args {
             source,
             dest: dest.clone(),
             mode: "0400".into(),
             owner: None,
-        }));
+        });
 
         assert!(result.is_ok());
         let perms = fs::metadata(&dest).unwrap().permissions();
@@ -156,13 +153,12 @@ mod tests {
         fs::write(&source, "data").unwrap();
         let dest = dir.join("dest.txt");
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(run(Args {
+        let result = run(Args {
             source,
             dest: dest.clone(),
             mode: "600".into(),
             owner: None,
-        }));
+        });
 
         assert!(result.is_ok());
         let perms = fs::metadata(&dest).unwrap().permissions();
@@ -181,13 +177,12 @@ mod tests {
         fs::write(&source, "data").unwrap();
         let dest = dir.join("dest.txt");
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(run(Args {
+        let result = run(Args {
             source,
             dest,
             mode: "xyz".into(),
             owner: None,
-        }));
+        });
 
         assert!(result.is_err());
 
@@ -200,13 +195,12 @@ mod tests {
         let _ = fs::remove_dir_all(&dir);
         fs::create_dir_all(&dir).unwrap();
 
-        let rt = tokio::runtime::Runtime::new().unwrap();
-        let result = rt.block_on(run(Args {
+        let result = run(Args {
             source: dir.join("nonexistent"),
             dest: dir.join("dest.txt"),
             mode: "0600".into(),
             owner: None,
-        }));
+        });
 
         assert!(result.is_err());
 

@@ -23,7 +23,7 @@ pub struct Args {
     max_depth: u32,
 }
 
-pub async fn run(args: Args) -> Result<ExitCode> {
+pub fn run(args: Args) -> Result<ExitCode> {
     let home = std::env::var("HOME").context("HOME not set")?;
     let mut total_freed: u64 = 0;
     let mut targets_found: u32 = 0;

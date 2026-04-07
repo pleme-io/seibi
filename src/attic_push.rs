@@ -28,7 +28,7 @@ pub struct Args {
     server_name: String,
 }
 
-pub async fn run(args: Args) -> Result<ExitCode> {
+pub fn run(args: Args) -> Result<ExitCode> {
     let token = fs::read_to_string(&args.token_file)
         .with_context(|| format!("reading token from {}", args.token_file.display()))?;
     let token = token.trim();
