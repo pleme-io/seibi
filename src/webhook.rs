@@ -393,4 +393,69 @@ mod tests {
         assert!(json.contains("\"username\":\"test\""));
         assert!(json.contains("\"embeds\""));
     }
+
+    #[test]
+    fn webhook_new_stores_url_and_hostname() {
+        let wh = Webhook::new("https://discord.com/api/webhooks/123/abc", "myhost");
+        assert_eq!(wh.url, "https://discord.com/api/webhooks/123/abc");
+        assert_eq!(wh.hostname, "myhost");
+    }
+
+    #[test]
+    fn now_rfc3339_ends_with_z() {
+        let ts = now_rfc3339();
+        assert!(
+            ts.ends_with('Z'),
+            "UTC timestamp should end with Z: {ts}"
+        );
+    }
+
+    #[test]
+    fn embed_builder_multiple_fields() {
+        let embed = EmbedBuilder::new("multi")
+            .field("a", "1", true)
+            .field("b", "2", false)
+            .field("c", "3", true)
+            .build();
+        assert_eq!(embed.fields.len(), 3);
+        assert_eq!(embed.fields[2].name, "c");
+        assert!(embed.fields[2].inline);
+    }
+
+    #[test]
+    fn embed_builder_overwrite_description() {
+        let embed = EmbedBuilder::new("t")
+            .description("first")
+            .description("second")
+            .build();
+        assert_eq!(embed.description, "second");
+    }
+
+    #[test]
+    fn embed_builder_overwrite_color() {
+        let embed = EmbedBuilder::new("t").color(RED).color(GREEN).build();
+        assert_eq!(embed.color, GREEN);
+    }
+
+    #[test]
+    fn status_embed_description_passed_through() {
+        let metrics = crate::metrics::SystemMetrics {
+            uptime: "0s".into(),
+            load_avg: "0".into(),
+            memory_used: "0".into(),
+            memory_total: "0".into(),
+            disk_used: "0".into(),
+            disk_total: "0".into(),
+            disk_percent: "0%".into(),
+            cpu_temp: "0".into(),
+            battery_level: "100%".into(),
+            battery_status: "Full".into(),
+            wifi_status: "Connected".into(),
+            wifi_ssid: "Test".into(),
+            ip_address: "1.2.3.4".into(),
+        };
+        let embed = status_embed("h", "Healthy", GREEN, "custom msg", &metrics);
+        let built = embed.build();
+        assert_eq!(built.description, "custom msg");
+    }
 }
