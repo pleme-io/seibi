@@ -300,4 +300,91 @@ mod tests {
         let dir = std::env::temp_dir().join("seibi-test-dirsize-nonexistent");
         assert_eq!(dir_size(&dir), 0);
     }
+
+    #[test]
+    fn run_dry_run_does_not_delete() {
+        let dir = std::env::temp_dir().join("seibi-test-cleanup-dryrun");
+        let _ = fs::remove_dir_all(&dir);
+
+        let project = dir.join("myproject");
+        fs::create_dir_all(project.join("target/debug")).unwrap();
+        fs::write(project.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(project.join("target/debug/test"), "binary-data").unwrap();
+
+        unsafe { std::env::set_var("HOME", dir.to_string_lossy().as_ref()) };
+
+        let result = run(&Args {
+            paths: vec![dir.to_string_lossy().into_owned()],
+            cargo_cache: false,
+            dry_run: true,
+            max_depth: 4,
+        });
+
+        assert!(result.is_ok());
+        assert!(
+            project.join("target/debug/test").exists(),
+            "dry_run should not delete files"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_real_cleanup_deletes_target() {
+        let dir = std::env::temp_dir().join("seibi-test-cleanup-real");
+        let _ = fs::remove_dir_all(&dir);
+
+        let project = dir.join("myproject");
+        fs::create_dir_all(project.join("target/debug")).unwrap();
+        fs::write(project.join("Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+        fs::write(project.join("target/debug/test"), "binary-data").unwrap();
+
+        unsafe { std::env::set_var("HOME", dir.to_string_lossy().as_ref()) };
+
+        let result = run(&Args {
+            paths: vec![dir.to_string_lossy().into_owned()],
+            cargo_cache: false,
+            dry_run: false,
+            max_depth: 4,
+        });
+
+        assert!(result.is_ok());
+        assert!(
+            !project.join("target").exists(),
+            "real cleanup should remove target/ directory"
+        );
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_skips_nonexistent_path() {
+        unsafe { std::env::set_var("HOME", "/tmp") };
+
+        let result = run(&Args {
+            paths: vec!["/tmp/seibi-nonexistent-cleanup-path-xyz".into()],
+            cargo_cache: false,
+            dry_run: true,
+            max_depth: 4,
+        });
+
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn find_rust_targets_multiple_projects() {
+        let dir = std::env::temp_dir().join("seibi-test-find-multi");
+        let _ = fs::remove_dir_all(&dir);
+
+        for name in &["proj-a", "proj-b", "proj-c"] {
+            fs::create_dir_all(dir.join(format!("{name}/target"))).unwrap();
+            fs::write(dir.join(format!("{name}/Cargo.toml")), "[package]").unwrap();
+        }
+
+        let mut results = Vec::new();
+        find_rust_targets(&dir, 0, 4, &mut results);
+        assert_eq!(results.len(), 3);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }
