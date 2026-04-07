@@ -19,6 +19,7 @@ time = { version = "0.3", features = ["formatting"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread", "process", "time", "signal"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+thiserror = "2.0.18"
 
 [profile.release]
 codegen-units = 1
