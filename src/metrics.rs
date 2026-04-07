@@ -14,6 +14,26 @@ pub struct SystemMetrics {
     pub ip_address: String,
 }
 
+impl Default for SystemMetrics {
+    fn default() -> Self {
+        Self {
+            uptime: "N/A".into(),
+            load_avg: "N/A".into(),
+            memory_used: "N/A".into(),
+            memory_total: "N/A".into(),
+            disk_used: "N/A".into(),
+            disk_total: "N/A".into(),
+            disk_percent: "N/A".into(),
+            cpu_temp: "N/A".into(),
+            battery_level: "N/A".into(),
+            battery_status: "N/A".into(),
+            wifi_status: "N/A".into(),
+            wifi_ssid: "N/A".into(),
+            ip_address: "N/A".into(),
+        }
+    }
+}
+
 impl SystemMetrics {
     #[cfg(target_os = "linux")]
     #[must_use]
@@ -43,21 +63,7 @@ impl SystemMetrics {
     #[cfg(not(target_os = "linux"))]
     #[must_use]
     pub fn collect() -> Self {
-        Self {
-            uptime: "N/A".into(),
-            load_avg: "N/A".into(),
-            memory_used: "N/A".into(),
-            memory_total: "N/A".into(),
-            disk_used: "N/A".into(),
-            disk_total: "N/A".into(),
-            disk_percent: "N/A".into(),
-            cpu_temp: "N/A".into(),
-            battery_level: "N/A".into(),
-            battery_status: "N/A".into(),
-            wifi_status: "N/A".into(),
-            wifi_ssid: "N/A".into(),
-            ip_address: "N/A".into(),
-        }
+        Self::default()
     }
 
     /// Returns a human-readable health label.
@@ -111,6 +117,7 @@ mod tests {
             wifi_status: "Connected".into(),
             wifi_ssid: "HomeNet".into(),
             ip_address: "192.168.1.100".into(),
+            ..Default::default()
         };
         overrides(&mut m);
         m
@@ -247,6 +254,15 @@ mod tests {
         assert_eq!(parse_battery_percent("N/A"), None);
         assert_eq!(parse_battery_percent(""), None);
         assert_eq!(parse_battery_percent("abc%"), None);
+    }
+
+    #[test]
+    fn default_returns_all_na() {
+        let m = SystemMetrics::default();
+        assert_eq!(m.uptime, "N/A");
+        assert_eq!(m.load_avg, "N/A");
+        assert_eq!(m.memory_used, "N/A");
+        assert_eq!(m.ip_address, "N/A");
     }
 
     #[test]
