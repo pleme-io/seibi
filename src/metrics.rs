@@ -346,6 +346,59 @@ mod tests {
         fn parse_kb_invalid() {
             assert_eq!(parse_kb("abc kB"), 0);
         }
+
+        #[test]
+        fn parse_kb_no_unit_label() {
+            assert_eq!(parse_kb("  2048 "), 2048);
+        }
+
+        #[test]
+        fn collect_linux_returns_non_empty_uptime() {
+            let m = SystemMetrics::collect();
+            assert_ne!(m.uptime, "N/A", "Linux uptime should be readable");
+        }
+
+        #[test]
+        fn collect_linux_returns_non_empty_load_avg() {
+            let m = SystemMetrics::collect();
+            assert_ne!(m.load_avg, "N/A");
+            assert!(
+                m.load_avg.contains(','),
+                "load_avg should contain commas: {}",
+                m.load_avg
+            );
+        }
+
+        #[test]
+        fn collect_linux_returns_non_empty_memory() {
+            let m = SystemMetrics::collect();
+            assert_ne!(m.memory_total, "N/A");
+            assert_ne!(m.memory_used, "N/A");
+        }
+
+        #[test]
+        fn read_uptime_parses() {
+            let result = read_uptime();
+            assert_ne!(result, "N/A", "uptime should be parseable: {result}");
+        }
+
+        #[test]
+        fn read_load_avg_parses() {
+            let result = read_load_avg();
+            assert_ne!(result, "N/A");
+        }
+
+        #[test]
+        fn format_duration_large_value() {
+            assert_eq!(format_duration(100_000.0), "1d 3h 46m");
+        }
+
+        #[test]
+        fn format_bytes_boundary_values() {
+            assert_eq!(format_bytes(1023), "1023.0 B");
+            assert_eq!(format_bytes(1024), "1.0 KB");
+            assert_eq!(format_bytes(1025), "1.0 KB");
+        }
     }
 }
 
