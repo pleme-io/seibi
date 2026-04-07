@@ -1,4 +1,3 @@
-use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
 use reqwest::Client;
 use serde::Serialize;
@@ -6,6 +5,27 @@ use std::fs;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tracing::info;
+
+#[derive(Debug, thiserror::Error)]
+enum DdnsError {
+    #[error("failed to read token: {0}")]
+    TokenRead(#[from] std::io::Error),
+
+    #[error("fetching public IP: {0}")]
+    PublicIpFetch(#[source] reqwest::Error),
+
+    #[error("updating Cloudflare DNS: {0}")]
+    CloudflareRequest(#[source] reqwest::Error),
+
+    #[error("Cloudflare API error ({status}): {body}")]
+    CloudflareApi {
+        status: reqwest::StatusCode,
+        body: String,
+    },
+
+    #[error("writing state file: {0}")]
+    StateWrite(#[source] std::io::Error),
+}
 
 #[derive(ClapArgs)]
 pub struct Args {
@@ -40,7 +60,7 @@ struct DnsRecord {
     proxied: bool,
 }
 
-pub async fn run(args: Args) -> Result<ExitCode> {
+pub async fn run(args: Args) -> Result<ExitCode, anyhow::Error> {
     let token = read_token(&args.token_file)?;
     let client = Client::new();
 
@@ -48,9 +68,10 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         .get("https://api.ipify.org")
         .send()
         .await
-        .context("fetching public IP")?
+        .map_err(DdnsError::PublicIpFetch)?
         .text()
-        .await?
+        .await
+        .map_err(DdnsError::PublicIpFetch)?
         .trim()
         .to_owned();
 
@@ -79,18 +100,18 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         .json(&record)
         .send()
         .await
-        .context("updating Cloudflare DNS")?;
+        .map_err(DdnsError::CloudflareRequest)?;
 
     if !resp.status().is_success() {
         let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        anyhow::bail!("Cloudflare API error ({status}): {body}");
+        return Err(DdnsError::CloudflareApi { status, body }.into());
     }
 
     if let Some(parent) = args.state_file.parent() {
-        fs::create_dir_all(parent)?;
+        fs::create_dir_all(parent).map_err(DdnsError::StateWrite)?;
     }
-    fs::write(&args.state_file, &current_ip)?;
+    fs::write(&args.state_file, &current_ip).map_err(DdnsError::StateWrite)?;
 
     info!(
         old = ?last_ip,
@@ -101,7 +122,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-fn read_token(path: &std::path::Path) -> Result<String> {
+fn read_token(path: &std::path::Path) -> anyhow::Result<String> {
     crate::common::read_trimmed_file(path)
 }
 
@@ -143,6 +164,17 @@ mod tests {
         assert_eq!(token, "");
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn ddns_error_cloudflare_api_display() {
+        let err = DdnsError::CloudflareApi {
+            status: reqwest::StatusCode::FORBIDDEN,
+            body: "bad token".into(),
+        };
+        let msg = err.to_string();
+        assert!(msg.contains("403"), "should contain status code: {msg}");
+        assert!(msg.contains("bad token"), "should contain body: {msg}");
     }
 
     #[test]
