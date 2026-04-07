@@ -42,11 +42,11 @@ pub struct Webhook {
 
 impl Webhook {
     #[must_use]
-    pub fn new(url: &str, hostname: &str) -> Self {
+    pub fn new(url: impl Into<String>, hostname: impl Into<String>) -> Self {
         Self {
             client: Client::new(),
-            url: url.to_owned(),
-            hostname: hostname.to_owned(),
+            url: url.into(),
+            hostname: hostname.into(),
         }
     }
 

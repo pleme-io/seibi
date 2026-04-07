@@ -7,6 +7,13 @@ pub struct ProbeResult {
     pub detail: String,
 }
 
+impl fmt::Display for ProbeResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let status = if self.healthy { "ok" } else { "FAIL" };
+        write!(f, "[{status}] {}", self.detail)
+    }
+}
+
 #[non_exhaustive]
 pub enum Probe {
     Ping { target: String },
@@ -146,6 +153,24 @@ mod tests {
             unit: "docker.service".into(),
         };
         assert_eq!(probe.name(), "docker.service");
+    }
+
+    #[test]
+    fn probe_result_display_healthy() {
+        let r = ProbeResult {
+            healthy: true,
+            detail: "ping 8.8.8.8 ok".into(),
+        };
+        assert_eq!(r.to_string(), "[ok] ping 8.8.8.8 ok");
+    }
+
+    #[test]
+    fn probe_result_display_unhealthy() {
+        let r = ProbeResult {
+            healthy: false,
+            detail: "ping 8.8.8.8 failed".into(),
+        };
+        assert_eq!(r.to_string(), "[FAIL] ping 8.8.8.8 failed");
     }
 
     #[test]
