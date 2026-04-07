@@ -207,3 +207,88 @@ fn collect_sources(primary: &Path, home: &str) -> Vec<PathBuf> {
         PathBuf::from(format!("{home}/Applications")),
     ]
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn extract_plist_value_basic() {
+        let xml = r#"<?xml version="1.0"?>
+<plist>
+<dict>
+    <key>CFBundleExecutable</key>
+    <string>MyApp</string>
+    <key>CFBundleName</key>
+    <string>My Application</string>
+</dict>
+</plist>"#;
+        assert_eq!(
+            extract_plist_value(xml, "CFBundleExecutable"),
+            Some("MyApp".to_owned())
+        );
+        assert_eq!(
+            extract_plist_value(xml, "CFBundleName"),
+            Some("My Application".to_owned())
+        );
+    }
+
+    #[test]
+    fn extract_plist_value_missing_key() {
+        let xml = "<plist><dict><key>Other</key><string>val</string></dict></plist>";
+        assert_eq!(extract_plist_value(xml, "CFBundleExecutable"), None);
+    }
+
+    #[test]
+    fn extract_plist_value_empty_string() {
+        let xml = "<plist><dict><key>CFBundleExecutable</key><string></string></dict></plist>";
+        assert_eq!(
+            extract_plist_value(xml, "CFBundleExecutable"),
+            Some("".to_owned())
+        );
+    }
+
+    #[test]
+    fn extract_plist_value_no_string_tag() {
+        let xml = "<plist><dict><key>CFBundleExecutable</key><integer>42</integer></dict></plist>";
+        assert_eq!(extract_plist_value(xml, "CFBundleExecutable"), None);
+    }
+
+    #[test]
+    fn extract_plist_value_empty_xml() {
+        assert_eq!(extract_plist_value("", "CFBundleExecutable"), None);
+    }
+
+    #[test]
+    fn expand_tilde_with_home_prefix() {
+        let result = expand_tilde("~/Documents/test", "/home/user");
+        assert_eq!(result, PathBuf::from("/home/user/Documents/test"));
+    }
+
+    #[test]
+    fn expand_tilde_without_home_prefix() {
+        let result = expand_tilde("/absolute/path", "/home/user");
+        assert_eq!(result, PathBuf::from("/absolute/path"));
+    }
+
+    #[test]
+    fn expand_tilde_only_tilde_slash() {
+        let result = expand_tilde("~/", "/home/user");
+        assert_eq!(result, PathBuf::from("/home/user/"));
+    }
+
+    #[test]
+    fn expand_tilde_tilde_without_slash_is_literal() {
+        let result = expand_tilde("~nope", "/home/user");
+        assert_eq!(result, PathBuf::from("~nope"));
+    }
+
+    #[test]
+    fn collect_sources_includes_primary_and_applications() {
+        let primary = PathBuf::from("/custom/apps");
+        let sources = collect_sources(&primary, "/home/user");
+        assert_eq!(sources.len(), 2);
+        assert_eq!(sources[0], PathBuf::from("/custom/apps"));
+        assert_eq!(sources[1], PathBuf::from("/home/user/Applications"));
+    }
+}

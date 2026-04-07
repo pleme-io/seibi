@@ -89,6 +89,266 @@ fn parse_battery_percent(s: &str) -> Option<u32> {
     s.trim_end_matches('%').trim().parse().ok()
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn make_metrics(overrides: impl FnOnce(&mut SystemMetrics)) -> SystemMetrics {
+        let mut m = SystemMetrics {
+            uptime: "1d".into(),
+            load_avg: "0.5, 0.3, 0.1".into(),
+            memory_used: "4.0 GB".into(),
+            memory_total: "16.0 GB".into(),
+            disk_used: "50.0 GB".into(),
+            disk_total: "500.0 GB".into(),
+            disk_percent: "10%".into(),
+            cpu_temp: "45.0°C".into(),
+            battery_level: "85%".into(),
+            battery_status: "Charging".into(),
+            wifi_status: "Connected".into(),
+            wifi_ssid: "HomeNet".into(),
+            ip_address: "192.168.1.100".into(),
+        };
+        overrides(&mut m);
+        m
+    }
+
+    #[test]
+    fn health_healthy_when_all_normal() {
+        let m = make_metrics(|_| {});
+        assert_eq!(m.health_assessment(), "Healthy");
+    }
+
+    #[test]
+    fn health_network_down_when_wifi_disconnected() {
+        let m = make_metrics(|m| m.wifi_status = "Disconnected".into());
+        assert_eq!(m.health_assessment(), "Network Down");
+    }
+
+    #[test]
+    fn health_battery_critical_below_10() {
+        let m = make_metrics(|m| m.battery_level = "9%".into());
+        assert_eq!(m.health_assessment(), "Battery Critical");
+    }
+
+    #[test]
+    fn health_battery_critical_at_boundary() {
+        let m = make_metrics(|m| m.battery_level = "10%".into());
+        assert_ne!(m.health_assessment(), "Battery Critical");
+    }
+
+    #[test]
+    fn health_low_battery_between_10_and_20() {
+        let m = make_metrics(|m| m.battery_level = "15%".into());
+        assert_eq!(m.health_assessment(), "Low Battery");
+
+        let m = make_metrics(|m| m.battery_level = "19%".into());
+        assert_eq!(m.health_assessment(), "Low Battery");
+    }
+
+    #[test]
+    fn health_low_battery_boundary_at_20() {
+        let m = make_metrics(|m| m.battery_level = "20%".into());
+        assert_eq!(m.health_assessment(), "Healthy");
+    }
+
+    #[test]
+    fn health_high_load() {
+        let m = make_metrics(|m| m.load_avg = "5.0, 3.0, 2.0".into());
+        assert_eq!(m.health_assessment(), "High Load");
+    }
+
+    #[test]
+    fn health_load_at_boundary() {
+        let m = make_metrics(|m| m.load_avg = "4.0, 3.0, 2.0".into());
+        assert_eq!(m.health_assessment(), "Healthy");
+    }
+
+    #[test]
+    fn health_load_just_above_boundary() {
+        let m = make_metrics(|m| m.load_avg = "4.01, 3.0, 2.0".into());
+        assert_eq!(m.health_assessment(), "High Load");
+    }
+
+    #[test]
+    fn health_priority_network_over_battery() {
+        let m = make_metrics(|m| {
+            m.wifi_status = "Disconnected".into();
+            m.battery_level = "5%".into();
+        });
+        assert_eq!(m.health_assessment(), "Network Down");
+    }
+
+    #[test]
+    fn health_priority_battery_over_load() {
+        let m = make_metrics(|m| {
+            m.battery_level = "5%".into();
+            m.load_avg = "10.0, 8.0, 6.0".into();
+        });
+        assert_eq!(m.health_assessment(), "Battery Critical");
+    }
+
+    #[test]
+    fn health_unparseable_battery_falls_through() {
+        let m = make_metrics(|m| m.battery_level = "N/A".into());
+        assert_eq!(m.health_assessment(), "Healthy");
+    }
+
+    #[test]
+    fn health_unparseable_load_falls_through() {
+        let m = make_metrics(|m| m.load_avg = "N/A".into());
+        assert_eq!(m.health_assessment(), "Healthy");
+    }
+
+    #[test]
+    fn health_empty_load_avg() {
+        let m = make_metrics(|m| m.load_avg = "".into());
+        assert_eq!(m.health_assessment(), "Healthy");
+    }
+
+    #[test]
+    fn parse_battery_percent_normal() {
+        assert_eq!(parse_battery_percent("85%"), Some(85));
+    }
+
+    #[test]
+    fn parse_battery_percent_no_percent_sign() {
+        assert_eq!(parse_battery_percent("85"), Some(85));
+    }
+
+    #[test]
+    fn parse_battery_percent_with_leading_whitespace() {
+        assert_eq!(parse_battery_percent(" 85%"), Some(85));
+    }
+
+    #[test]
+    fn parse_battery_percent_trailing_space_after_percent_fails() {
+        // trim_end_matches('%') won't strip '%' when trailing whitespace follows,
+        // so " 85% " parses to None — this is acceptable since the input is
+        // always formatted as "XX%" by read_battery_level
+        assert_eq!(parse_battery_percent(" 85% "), None);
+    }
+
+    #[test]
+    fn parse_battery_percent_zero() {
+        assert_eq!(parse_battery_percent("0%"), Some(0));
+    }
+
+    #[test]
+    fn parse_battery_percent_hundred() {
+        assert_eq!(parse_battery_percent("100%"), Some(100));
+    }
+
+    #[test]
+    fn parse_battery_percent_invalid() {
+        assert_eq!(parse_battery_percent("N/A"), None);
+        assert_eq!(parse_battery_percent(""), None);
+        assert_eq!(parse_battery_percent("abc%"), None);
+    }
+
+    #[test]
+    fn collect_non_linux_returns_na() {
+        #[cfg(not(target_os = "linux"))]
+        {
+            let m = SystemMetrics::collect();
+            assert_eq!(m.uptime, "N/A");
+            assert_eq!(m.load_avg, "N/A");
+            assert_eq!(m.wifi_status, "N/A");
+        }
+    }
+
+    #[cfg(target_os = "linux")]
+    mod linux_tests {
+        use super::super::*;
+
+        #[test]
+        fn format_bytes_zero() {
+            assert_eq!(format_bytes(0), "0.0 B");
+        }
+
+        #[test]
+        fn format_bytes_bytes_range() {
+            assert_eq!(format_bytes(512), "512.0 B");
+        }
+
+        #[test]
+        fn format_bytes_kilobytes() {
+            assert_eq!(format_bytes(1024), "1.0 KB");
+            assert_eq!(format_bytes(1536), "1.5 KB");
+        }
+
+        #[test]
+        fn format_bytes_megabytes() {
+            assert_eq!(format_bytes(1024 * 1024), "1.0 MB");
+        }
+
+        #[test]
+        fn format_bytes_gigabytes() {
+            assert_eq!(format_bytes(1024 * 1024 * 1024), "1.0 GB");
+        }
+
+        #[test]
+        fn format_bytes_terabytes() {
+            assert_eq!(format_bytes(1024u64 * 1024 * 1024 * 1024), "1.0 TB");
+        }
+
+        #[test]
+        fn format_bytes_petabytes() {
+            assert_eq!(
+                format_bytes(1024u64 * 1024 * 1024 * 1024 * 1024),
+                "1.0 PB"
+            );
+        }
+
+        #[test]
+        fn format_duration_seconds_only() {
+            assert_eq!(format_duration(30.0), "30s");
+        }
+
+        #[test]
+        fn format_duration_minutes() {
+            assert_eq!(format_duration(120.0), "2m");
+        }
+
+        #[test]
+        fn format_duration_hours_and_minutes() {
+            assert_eq!(format_duration(3660.0), "1h 1m");
+        }
+
+        #[test]
+        fn format_duration_days() {
+            assert_eq!(format_duration(90000.0), "1d 1h");
+        }
+
+        #[test]
+        fn format_duration_zero() {
+            assert_eq!(format_duration(0.0), "0s");
+        }
+
+        #[test]
+        fn format_duration_fractional_truncates() {
+            // format_duration only shows the largest units; seconds are omitted
+            // when minutes are present (by design: no seconds branch in the fn)
+            assert_eq!(format_duration(61.9), "1m");
+        }
+
+        #[test]
+        fn parse_kb_normal() {
+            assert_eq!(parse_kb("  16384 kB"), 16384);
+        }
+
+        #[test]
+        fn parse_kb_empty() {
+            assert_eq!(parse_kb(""), 0);
+        }
+
+        #[test]
+        fn parse_kb_invalid() {
+            assert_eq!(parse_kb("abc kB"), 0);
+        }
+    }
+}
+
 // ── Linux /proc + /sys readers ──────────────────────────────
 
 #[cfg(target_os = "linux")]

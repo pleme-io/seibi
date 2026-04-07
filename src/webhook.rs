@@ -226,3 +226,159 @@ fn now_rfc3339() -> String {
         .format(&time::format_description::well_known::Rfc3339)
         .unwrap_or_default()
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn event_color_up_suffix_returns_green() {
+        assert_eq!(event_color("network-up"), GREEN);
+        assert_eq!(event_color("wifi-up"), GREEN);
+    }
+
+    #[test]
+    fn event_color_boot_returns_green() {
+        assert_eq!(event_color("boot"), GREEN);
+    }
+
+    #[test]
+    fn event_color_down_suffix_returns_red() {
+        assert_eq!(event_color("network-down"), RED);
+        assert_eq!(event_color("wifi-down"), RED);
+    }
+
+    #[test]
+    fn event_color_shutdown_returns_red() {
+        assert_eq!(event_color("shutdown"), RED);
+    }
+
+    #[test]
+    fn event_color_unknown_returns_blue() {
+        assert_eq!(event_color("status"), BLUE);
+        assert_eq!(event_color("custom-event"), BLUE);
+        assert_eq!(event_color(""), BLUE);
+    }
+
+    #[test]
+    fn health_color_healthy_returns_green() {
+        assert_eq!(health_color("Healthy"), GREEN);
+    }
+
+    #[test]
+    fn health_color_critical_returns_red() {
+        assert_eq!(health_color("Battery Critical"), RED);
+        assert_eq!(health_color("Critical"), RED);
+    }
+
+    #[test]
+    fn health_color_down_returns_red() {
+        assert_eq!(health_color("Network Down"), RED);
+    }
+
+    #[test]
+    fn health_color_other_returns_orange() {
+        assert_eq!(health_color("Low Battery"), ORANGE);
+        assert_eq!(health_color("High Load"), ORANGE);
+        assert_eq!(health_color("Unknown"), ORANGE);
+    }
+
+    #[test]
+    fn embed_builder_defaults() {
+        let embed = EmbedBuilder::new("test title").build();
+        assert_eq!(embed.title, "test title");
+        assert_eq!(embed.description, "");
+        assert_eq!(embed.color, BLUE);
+        assert!(embed.fields.is_empty());
+        assert!(embed.footer.is_none());
+        assert!(embed.timestamp.is_some());
+    }
+
+    #[test]
+    fn embed_builder_chaining() {
+        let embed = EmbedBuilder::new("title")
+            .description("desc")
+            .color(RED)
+            .field("f1", "v1", true)
+            .field("f2", "v2", false)
+            .footer("foot")
+            .build();
+
+        assert_eq!(embed.title, "title");
+        assert_eq!(embed.description, "desc");
+        assert_eq!(embed.color, RED);
+        assert_eq!(embed.fields.len(), 2);
+        assert_eq!(embed.fields[0].name, "f1");
+        assert_eq!(embed.fields[0].value, "v1");
+        assert!(embed.fields[0].inline);
+        assert_eq!(embed.fields[1].name, "f2");
+        assert!(!embed.fields[1].inline);
+        assert_eq!(embed.footer.unwrap().text, "foot");
+    }
+
+    #[test]
+    fn embed_serializes_without_empty_fields() {
+        let embed = EmbedBuilder::new("t").build();
+        let json = serde_json::to_string(&embed).unwrap();
+        assert!(!json.contains("fields"));
+        assert!(!json.contains("footer"));
+    }
+
+    #[test]
+    fn embed_serializes_with_fields_and_footer() {
+        let embed = EmbedBuilder::new("t")
+            .field("k", "v", true)
+            .footer("f")
+            .build();
+        let json = serde_json::to_string(&embed).unwrap();
+        assert!(json.contains("\"fields\""));
+        assert!(json.contains("\"footer\""));
+    }
+
+    #[test]
+    fn status_embed_contains_all_metric_fields() {
+        let metrics = crate::metrics::SystemMetrics {
+            uptime: "1d 2h".into(),
+            load_avg: "0.5, 0.3, 0.1".into(),
+            memory_used: "4.0 GB".into(),
+            memory_total: "16.0 GB".into(),
+            disk_used: "50.0 GB".into(),
+            disk_total: "500.0 GB".into(),
+            disk_percent: "10%".into(),
+            cpu_temp: "45.0°C".into(),
+            battery_level: "85%".into(),
+            battery_status: "Charging".into(),
+            wifi_status: "Connected".into(),
+            wifi_ssid: "HomeNet".into(),
+            ip_address: "192.168.1.100".into(),
+        };
+
+        let embed = status_embed("myhost", "Healthy", GREEN, "test desc", &metrics);
+        let built = embed.build();
+
+        assert!(built.title.contains("myhost"));
+        assert!(built.title.contains("Healthy"));
+        assert_eq!(built.description, "test desc");
+        assert_eq!(built.color, GREEN);
+        assert_eq!(built.fields.len(), 8);
+        assert_eq!(built.footer.unwrap().text, "myhost seibi");
+    }
+
+    #[test]
+    fn now_rfc3339_produces_valid_timestamp() {
+        let ts = now_rfc3339();
+        assert!(!ts.is_empty());
+        assert!(ts.contains('T'));
+    }
+
+    #[test]
+    fn payload_serializes_correctly() {
+        let payload = Payload {
+            username: "test".into(),
+            embeds: vec![EmbedBuilder::new("t").build()],
+        };
+        let json = serde_json::to_string(&payload).unwrap();
+        assert!(json.contains("\"username\":\"test\""));
+        assert!(json.contains("\"embeds\""));
+    }
+}
