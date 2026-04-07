@@ -10,6 +10,7 @@ pub const RED: u32 = 0xe7_4c3c;
 pub const ORANGE: u32 = 0xe6_7e22;
 pub const BLUE: u32 = 0x34_98db;
 
+#[must_use]
 pub fn event_color(event: &str) -> u32 {
     if event.ends_with("-up") || event == "boot" {
         GREEN
@@ -20,6 +21,7 @@ pub fn event_color(event: &str) -> u32 {
     }
 }
 
+#[must_use]
 pub fn health_color(health: &str) -> u32 {
     if health == "Healthy" {
         GREEN
@@ -39,6 +41,7 @@ pub struct Webhook {
 }
 
 impl Webhook {
+    #[must_use]
     pub fn new(url: &str, hostname: &str) -> Self {
         Self {
             client: Client::new(),
@@ -90,6 +93,7 @@ pub struct EmbedBuilder {
 }
 
 impl EmbedBuilder {
+    #[must_use]
     pub fn new(title: impl Into<String>) -> Self {
         Self {
             title: title.into(),
@@ -181,6 +185,7 @@ struct Footer {
 // ── Shared status embed builder ─────────────────────────────
 
 /// Build a status embed with system metrics. Used by both `notify` and `monitor`.
+#[must_use]
 pub fn status_embed(
     hostname: &str,
     health: &str,

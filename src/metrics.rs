@@ -16,6 +16,7 @@ pub struct SystemMetrics {
 
 impl SystemMetrics {
     #[cfg(target_os = "linux")]
+    #[must_use]
     pub fn collect() -> Self {
         let (memory_used, memory_total) =
             read_memory().unwrap_or_else(|| ("N/A".into(), "N/A".into()));
@@ -40,6 +41,7 @@ impl SystemMetrics {
     }
 
     #[cfg(not(target_os = "linux"))]
+    #[must_use]
     pub fn collect() -> Self {
         Self {
             uptime: "N/A".into(),
@@ -59,6 +61,7 @@ impl SystemMetrics {
     }
 
     /// Returns a human-readable health label.
+    #[must_use]
     pub fn health_assessment(&self) -> &str {
         if self.wifi_status.contains("Disconnected") {
             return "Network Down";

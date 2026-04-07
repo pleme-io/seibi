@@ -6,6 +6,7 @@ pub struct ProbeResult {
     pub detail: String,
 }
 
+#[non_exhaustive]
 pub enum Probe {
     Ping { target: String },
     Wifi { interface: String },
@@ -13,6 +14,7 @@ pub enum Probe {
 }
 
 impl Probe {
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
             Self::Ping { .. } => "network",
