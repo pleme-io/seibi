@@ -45,6 +45,14 @@ pub fn read_trimmed_file(path: &Path) -> Result<String> {
         .with_context(|| format!("reading {}", path.display()))
 }
 
+/// Shell-escape a value for safe inclusion in `export VAR='...'`.
+///
+/// Uses single-quote wrapping with `'\''` to escape embedded single quotes.
+#[must_use]
+pub fn shell_escape(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "'\\''"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -115,6 +123,30 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&dir);
     }
+
+    // ── shell_escape ─────────────────────────────────────────
+
+    #[test]
+    fn shell_escape_simple() {
+        assert_eq!(shell_escape("hello"), "'hello'");
+    }
+
+    #[test]
+    fn shell_escape_with_quotes() {
+        assert_eq!(shell_escape("it's"), "'it'\\''s'");
+    }
+
+    #[test]
+    fn shell_escape_empty() {
+        assert_eq!(shell_escape(""), "''");
+    }
+
+    #[test]
+    fn shell_escape_special_chars() {
+        assert_eq!(shell_escape("a$b`c"), "'a$b`c'");
+    }
+
+    // ── read_trimmed_file ───────────────────────────────────
 
     #[test]
     fn read_trimmed_file_missing_returns_error() {

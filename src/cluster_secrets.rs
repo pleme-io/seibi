@@ -81,10 +81,8 @@ async fn try_extract(
     None
 }
 
-/// Shell-escape a value for safe inclusion in `export VAR='...'`.
 fn shell_escape(s: &str) -> String {
-    // Single-quote escaping: replace ' with '\''
-    format!("'{}'", s.replace('\'', "'\\''"))
+    crate::common::shell_escape(s)
 }
 
 pub async fn run(args: Args) -> Result<ExitCode> {
