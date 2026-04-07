@@ -17,7 +17,7 @@ pub struct Args {
     pcrs: String,
 }
 
-pub fn run(args: Args) -> Result<ExitCode> {
+pub fn run(args: &Args) -> Result<ExitCode> {
     let device = format!("/dev/disk/by-uuid/{}", args.luks_uuid);
     let name = format!("luks-{}", args.luks_uuid);
 
@@ -94,6 +94,6 @@ pub fn run(args: Args) -> Result<ExitCode> {
         info!(device = %device, pcrs = %args.pcrs, "TPM2 enrollment complete");
         Ok(ExitCode::SUCCESS)
     } else {
-        bail!("systemd-cryptenroll failed (exit {})", status);
+        bail!("systemd-cryptenroll failed (exit {status})");
     }
 }

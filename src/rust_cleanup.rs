@@ -23,7 +23,7 @@ pub struct Args {
     max_depth: u32,
 }
 
-pub fn run(args: Args) -> Result<ExitCode> {
+pub fn run(args: &Args) -> Result<ExitCode> {
     let home = std::env::var("HOME").context("HOME not set")?;
     let mut total_freed: u64 = 0;
     let mut targets_found: u32 = 0;
@@ -121,9 +121,8 @@ fn find_rust_targets(dir: &Path, depth: u32, max_depth: u32, results: &mut Vec<P
         return;
     }
 
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(_) => return,
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return;
     };
 
     for entry in entries.flatten() {
@@ -153,9 +152,8 @@ fn find_rust_targets(dir: &Path, depth: u32, max_depth: u32, results: &mut Vec<P
 fn dir_size(dir: &Path) -> u64 {
     let mut total: u64 = 0;
 
-    let entries = match std::fs::read_dir(dir) {
-        Ok(entries) => entries,
-        Err(_) => return 0,
+    let Ok(entries) = std::fs::read_dir(dir) else {
+        return 0;
     };
 
     for entry in entries.flatten() {
@@ -171,8 +169,8 @@ fn dir_size(dir: &Path) -> u64 {
 }
 
 fn expand_tilde(path: &str, home: &str) -> PathBuf {
-    if path.starts_with("~/") {
-        PathBuf::from(home).join(&path[2..])
+    if let Some(rest) = path.strip_prefix("~/") {
+        PathBuf::from(home).join(rest)
     } else {
         PathBuf::from(path)
     }

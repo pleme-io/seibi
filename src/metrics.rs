@@ -59,7 +59,7 @@ impl SystemMetrics {
     }
 
     /// Returns a human-readable health label.
-    pub fn health_assessment(&self) -> &str {
+    pub fn health_assessment(&self) -> &'static str {
         if self.wifi_status.contains("Disconnected") {
             return "Network Down";
         }
@@ -73,12 +73,11 @@ impl SystemMetrics {
             }
         }
 
-        if let Some(load) = self.load_avg.split(',').next() {
-            if let Ok(l) = load.trim().parse::<f64>() {
-                if l > 4.0 {
-                    return "High Load";
-                }
-            }
+        if let Some(load) = self.load_avg.split(',').next()
+            && let Ok(l) = load.trim().parse::<f64>()
+            && l > 4.0
+        {
+            return "High Load";
         }
 
         "Healthy"
@@ -362,20 +361,19 @@ fn read_uptime() -> String {
         .ok()
         .and_then(|s| s.split_whitespace().next().map(String::from))
         .and_then(|s| s.parse::<f64>().ok())
-        .map(format_duration)
-        .unwrap_or_else(|| "N/A".into())
+        .map_or_else(|| "N/A".into(), format_duration)
 }
 
 #[cfg(target_os = "linux")]
 fn read_load_avg() -> String {
     fs::read_to_string("/proc/loadavg")
         .ok()
-        .map(|s| {
+        .and_then(|s| {
             let f: Vec<&str> = s.split_whitespace().collect();
             if f.len() >= 3 {
-                format!("{}, {}, {}", f[0], f[1], f[2])
+                Some(format!("{}, {}, {}", f[0], f[1], f[2]))
             } else {
-                "N/A".into()
+                None
             }
         })
         .unwrap_or_else(|| "N/A".into())
@@ -430,10 +428,11 @@ fn read_disk() -> Option<(String, String, String)> {
 fn read_cpu_temp() -> String {
     for i in 0..10 {
         let path = format!("/sys/class/thermal/thermal_zone{i}/temp");
-        if let Ok(temp_str) = fs::read_to_string(&path) {
-            if let Ok(millideg) = temp_str.trim().parse::<u64>() {
-                return format!("{:.1}\u{00b0}C", millideg as f64 / 1000.0);
-            }
+        if let Ok(temp_str) = fs::read_to_string(&path)
+            && let Ok(millideg) = temp_str.trim().parse::<u64>()
+        {
+            #[allow(clippy::cast_precision_loss)]
+            return format!("{:.1}\u{00b0}C", millideg as f64 / 1000.0);
         }
     }
     "N/A".into()
@@ -511,6 +510,7 @@ fn read_ip_address() -> String {
 #[cfg(target_os = "linux")]
 fn format_bytes(bytes: u64) -> String {
     const UNITS: &[&str] = &["B", "KB", "MB", "GB", "TB"];
+    #[allow(clippy::cast_precision_loss)]
     let mut size = bytes as f64;
     for unit in UNITS {
         if size < 1024.0 {
@@ -523,6 +523,7 @@ fn format_bytes(bytes: u64) -> String {
 
 #[cfg(target_os = "linux")]
 fn format_duration(seconds: f64) -> String {
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
     let secs = seconds as u64;
     let days = secs / 86400;
     let hours = (secs % 86400) / 3600;

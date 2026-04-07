@@ -111,7 +111,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
 // ── Key file wait ───────────────────────────────────────────────
 
-async fn wait_for_key(path: &PathBuf) {
+async fn wait_for_key(path: &Path) {
     if path.exists() {
         info!(path = %path.display(), "key file present");
         return;
@@ -222,17 +222,18 @@ fn resolve_config(config_text: &str, key_file: &Path) -> Result<Option<String>> 
         }
 
         // ── Legacy: convert PostUp preshared-key into inline PresharedKey ──
-        if trimmed.starts_with("PostUp") && trimmed.contains("preshared-key") {
-            if let Some(psk_path) = trimmed.rsplit("preshared-key").next() {
-                let psk_path = psk_path.trim();
-                match fs::read_to_string(psk_path) {
-                    Ok(psk) => {
-                        output.push(format!("PresharedKey = {}", psk.trim()));
-                        continue;
-                    }
-                    Err(e) => {
-                        warn!(path = psk_path, error = %e, "could not read PSK file, keeping PostUp line");
-                    }
+        if trimmed.starts_with("PostUp")
+            && trimmed.contains("preshared-key")
+            && let Some(psk_path) = trimmed.rsplit("preshared-key").next()
+        {
+            let psk_path = psk_path.trim();
+            match fs::read_to_string(psk_path) {
+                Ok(psk) => {
+                    output.push(format!("PresharedKey = {}", psk.trim()));
+                    continue;
+                }
+                Err(e) => {
+                    warn!(path = psk_path, error = %e, "could not read PSK file, keeping PostUp line");
                 }
             }
         }
@@ -243,10 +244,11 @@ fn resolve_config(config_text: &str, key_file: &Path) -> Result<Option<String>> 
     // Safety net: if we found markers but somehow didn't inject PrivateKey
     // (shouldn't happen, but guard against malformed configs), inject it
     // after [Interface].
-    if !privkey_injected && (has_privkey_comment || has_placeholder) {
-        if let Some(pos) = output.iter().position(|l| l.trim() == "[Interface]") {
-            output.insert(pos + 1, format!("PrivateKey = {}", key.trim()));
-        }
+    if !privkey_injected
+        && (has_privkey_comment || has_placeholder)
+        && let Some(pos) = output.iter().position(|l| l.trim() == "[Interface]")
+    {
+        output.insert(pos + 1, format!("PrivateKey = {}", key.trim()));
     }
 
     Ok(Some(output.join("\n")))
@@ -259,7 +261,7 @@ async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()>
         .with_context(|| format!("reading wg config {}", config.display()))?;
 
     let effective_config: PathBuf;
-    let mut _cleanup: Option<PathBuf> = None;
+    let mut cleanup: Option<PathBuf> = None;
 
     if let Some(resolved) = resolve_config(&config_text, key_file)? {
         // wg-quick derives the interface name from the filename (stem before .conf).
@@ -271,7 +273,7 @@ async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()>
         fs::set_permissions(&tmp, fs::Permissions::from_mode(0o600))?;
         info!(tmp = %tmp.display(), "resolved config with inlined keys into temp config");
         effective_config = tmp.clone();
-        _cleanup = Some(tmp);
+        cleanup = Some(tmp);
     } else {
         effective_config = config.to_path_buf();
     }
@@ -281,11 +283,10 @@ async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()>
         .output()
         .await?;
 
-    // Clean up temp file regardless of outcome
-    if let Some(ref tmp) = _cleanup {
-        if let Err(e) = fs::remove_file(tmp) {
-            warn!(path = %tmp.display(), error = %e, "failed to remove temp config");
-        }
+    if let Some(ref tmp) = cleanup
+        && let Err(e) = fs::remove_file(tmp)
+    {
+        warn!(path = %tmp.display(), error = %e, "failed to remove temp config");
     }
 
     if output.status.success() {
@@ -297,7 +298,7 @@ async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()>
     }
 }
 
-async fn tunnel_down(wg_quick: &str, config: &PathBuf) {
+async fn tunnel_down(wg_quick: &str, config: &Path) {
     debug!(config = %config.display(), "tearing tunnel down");
     let result = Command::new(wg_quick)
         .args(["down", &config.display().to_string()])

@@ -27,7 +27,7 @@ pub struct Args {
     output: PathBuf,
 }
 
-pub fn run(args: Args) -> Result<ExitCode> {
+pub fn run(args: &Args) -> Result<ExitCode> {
     let token = fs::read_to_string(&args.token_file)
         .with_context(|| format!("reading token from {}", args.token_file.display()))?;
     let token = token.trim();
@@ -79,7 +79,7 @@ mod tests {
             output: output.clone(),
         };
 
-        let result = run(args).unwrap();
+        let result = run(&args).unwrap();
         assert_eq!(result, ExitCode::SUCCESS);
 
         let content = fs::read_to_string(&output).unwrap();
@@ -119,7 +119,7 @@ mod tests {
             output: output.clone(),
         };
 
-        let result = run(args).unwrap();
+        let result = run(&args).unwrap();
         assert_eq!(result, ExitCode::SUCCESS);
 
         let content = fs::read_to_string(&output).unwrap();
@@ -142,7 +142,7 @@ mod tests {
             output: dir.join("config.json"),
         };
 
-        let result = run(args);
+        let result = run(&args);
         assert!(result.is_err());
 
         let _ = fs::remove_dir_all(&dir);
@@ -165,7 +165,7 @@ mod tests {
             output: output.clone(),
         };
 
-        let result = run(args).unwrap();
+        let result = run(&args).unwrap();
         assert_eq!(result, ExitCode::SUCCESS);
         assert!(output.exists());
 
@@ -189,7 +189,7 @@ mod tests {
             output: output.clone(),
         };
 
-        run(args).unwrap();
+        run(&args).unwrap();
 
         let content = fs::read_to_string(&output).unwrap();
         let parsed: serde_json::Value = serde_json::from_str(&content).unwrap();

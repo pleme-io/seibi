@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Args as ClapArgs;
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::process::ExitCode;
 use std::time::Duration;
 use tokio::time;
@@ -74,7 +74,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         "monitor starting"
     );
 
-    let mut states: HashMap<String, Health> = HashMap::new();
+    let mut states: BTreeMap<String, Health> = BTreeMap::new();
     let mut last_report = std::time::Instant::now();
     let probe_interval = Duration::from_secs(args.interval);
     let report_interval = Duration::from_secs(args.report_interval);

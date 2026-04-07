@@ -35,7 +35,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
             let entry = entry?;
             let path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
-            if name.ends_with(".app") {
+            if has_app_extension(&name) {
                 let _ = std::fs::remove_dir_all(&path);
             } else {
                 let _ = std::fs::remove_file(&path);
@@ -61,7 +61,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
             let src_path = entry.path();
             let name = entry.file_name().to_string_lossy().to_string();
 
-            if !name.ends_with(".app") {
+            if !has_app_extension(&name) {
                 continue;
             }
 
@@ -83,7 +83,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
     for entry in std::fs::read_dir(&target).into_iter().flatten().flatten() {
         let name = entry.file_name().to_string_lossy().to_string();
-        if name.ends_with(".app") {
+        if has_app_extension(&name) {
             let _ = tokio::process::Command::new(lsregister)
                 .args(["-f", &entry.path().to_string_lossy()])
                 .stdout(std::process::Stdio::null())
@@ -161,7 +161,7 @@ fn create_wrapper_bundle(source: &Path, target_dir: &Path, name: &str) -> Result
         if let Ok(entries) = std::fs::read_dir(&src_resources) {
             for entry in entries.flatten() {
                 let fname = entry.file_name().to_string_lossy().to_string();
-                if fname.ends_with(".icns") {
+                if has_icns_extension(&fname) {
                     let _ = std::fs::copy(entry.path(), tgt_resources.join(&fname));
                 }
             }
@@ -193,9 +193,21 @@ fn extract_plist_value(xml: &str, key: &str) -> Option<String> {
     Some(rest[start..start + end].to_owned())
 }
 
+fn has_app_extension(name: &str) -> bool {
+    Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("app"))
+}
+
+fn has_icns_extension(name: &str) -> bool {
+    Path::new(name)
+        .extension()
+        .is_some_and(|ext| ext.eq_ignore_ascii_case("icns"))
+}
+
 fn expand_tilde(path: &str, home: &str) -> PathBuf {
-    if path.starts_with("~/") {
-        PathBuf::from(home).join(&path[2..])
+    if let Some(rest) = path.strip_prefix("~/") {
+        PathBuf::from(home).join(rest)
     } else {
         PathBuf::from(path)
     }

@@ -81,17 +81,17 @@ async fn run(cmd: Command) -> Result<ExitCode> {
     match cmd {
         Command::Ddns(args) => ddns::run(args).await,
         Command::Kubeconfig(args) => kubeconfig::run(args).await,
-        Command::HelmAuth(args) => helm_auth::run(args),
-        Command::AtticPush(args) => attic_push::run(args),
+        Command::HelmAuth(args) => helm_auth::run(&args),
+        Command::AtticPush(args) => attic_push::run(&args),
         Command::Notify(args) => notify::run(args).await,
         Command::Monitor(args) => monitor::run(args).await,
         Command::ClusterSecrets(args) => cluster_secrets::run(args).await,
-        Command::DeploySecret(args) => deploy_secret::run(args),
+        Command::DeploySecret(args) => deploy_secret::run(&args),
         Command::SopsKey(args) => sops_key::run(args).await,
         Command::SopsEdit(args) => sops_edit::run(args).await,
-        Command::AutoUnlock(args) => auto_unlock::run(args),
+        Command::AutoUnlock(args) => auto_unlock::run(&args),
         Command::SpotlightSync(args) => spotlight_sync::run(args).await,
-        Command::RustCleanup(args) => rust_cleanup::run(args),
+        Command::RustCleanup(args) => rust_cleanup::run(&args),
         Command::WgSupervisor(args) => wg_supervisor::run(args).await,
     }
 }

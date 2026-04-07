@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
+use std::os::unix::process::CommandExt;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tracing::info;
@@ -85,8 +86,6 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
     info!(file = %file.display(), "opening with sops");
 
-    // exec sops — replaces the current process
-    use std::os::unix::process::CommandExt;
     let err = std::process::Command::new("sops")
         .arg(&file)
         .env("SOPS_AGE_KEY_FILE", &key_file)

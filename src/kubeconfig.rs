@@ -67,11 +67,11 @@ async fn wait_for_file(path: &std::path::Path, timeout: Duration) -> Result<()> 
 }
 
 async fn detect_ip(try_hetzner: bool) -> String {
-    if try_hetzner {
-        if let Some(ip) = hetzner_ip().await {
-            info!(ip = %ip, source = "hetzner", "detected IP");
-            return ip;
-        }
+    if try_hetzner
+        && let Some(ip) = hetzner_ip().await
+    {
+        info!(ip = %ip, source = "hetzner", "detected IP");
+        return ip;
     }
 
     if let Some(ip) = first_global_ip() {
