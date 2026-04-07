@@ -59,7 +59,7 @@ enum Command {
     SpotlightSync(spotlight_sync::Args),
     /// Clean Rust target/ directories and cargo cache to reclaim disk space
     RustCleanup(rust_cleanup::Args),
-    /// Long-running WireGuard tunnel supervisor (key wait, health, auto-restart)
+    /// Long-running `WireGuard` tunnel supervisor (key wait, health, auto-restart)
     WgSupervisor(wg_supervisor::Args),
 }
 

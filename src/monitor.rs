@@ -31,7 +31,7 @@ pub struct Args {
     #[arg(long, default_value = "8.8.8.8")]
     ping_target: String,
 
-    /// WiFi interface name (omit to skip WiFi probe)
+    /// `WiFi` interface name (omit to skip `WiFi` probe)
     #[arg(long)]
     wifi_interface: Option<String>,
 

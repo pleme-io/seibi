@@ -11,7 +11,7 @@ use tracing::{debug, error, info, warn};
 
 #[derive(ClapArgs)]
 pub struct Args {
-    /// WireGuard interface name (e.g., wg-ryn-k3s)
+    /// `WireGuard` interface name (e.g., wg-ryn-k3s)
     #[arg(long)]
     interface: String,
 
@@ -140,13 +140,13 @@ const PSK_MARKER: &str = "# PresharedKeyFile = ";
 
 /// Build a complete wg-quick config with all secrets inlined.
 ///
-/// macOS wg-quick validates PrivateKey before running PostUp, so placeholder
+/// macOS wg-quick validates `PrivateKey` before running `PostUp`, so placeholder
 /// patterns and PostUp-based key injection do not work. This function always
 /// produces a config with real keys inlined, supporting two config formats:
 ///
-/// **New format** (no PrivateKey line):
+/// **New format** (no `PrivateKey` line):
 ///   - `# PrivateKeyFile:` comment in [Interface] — signals that the supervisor
-///     must inject PrivateKey from `key_file`.
+///     must inject `PrivateKey` from `key_file`.
 ///   - `# PresharedKeyFile = /path` comment in [Peer] — resolved to
 ///     `PresharedKey = <contents>`.
 ///
