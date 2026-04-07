@@ -94,3 +94,50 @@ fn run_clean(args: CleanArgs) -> Result<ExitCode> {
     }
     Ok(ExitCode::SUCCESS)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn run_clean_removes_existing_file() {
+        let dir = std::env::temp_dir().join("seibi-test-sops-clean-existing");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let key_file = dir.join("keys.txt");
+        fs::write(&key_file, "AGE-SECRET-KEY-1...").unwrap();
+        assert!(key_file.exists());
+
+        let result = run_clean(CleanArgs {
+            key_file: Some(key_file.clone()),
+        });
+        assert!(result.is_ok());
+        assert!(!key_file.exists());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn run_clean_succeeds_when_file_absent() {
+        let dir = std::env::temp_dir().join("seibi-test-sops-clean-absent");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let key_file = dir.join("nonexistent-key.txt");
+
+        let result = run_clean(CleanArgs {
+            key_file: Some(key_file),
+        });
+        assert!(result.is_ok());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn default_key_file_points_to_sops_dir() {
+        let path = default_key_file();
+        let s = path.to_string_lossy();
+        assert!(s.ends_with(".config/sops/age/keys.txt"), "got: {s}");
+    }
+}

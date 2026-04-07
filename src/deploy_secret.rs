@@ -25,6 +25,11 @@ pub struct Args {
     owner: Option<String>,
 }
 
+/// Parse an octal mode string (e.g. "0600", "644") into a `u32`.
+fn parse_octal_mode(s: &str) -> Result<u32, std::num::ParseIntError> {
+    u32::from_str_radix(s.trim_start_matches('0'), 8)
+}
+
 /// Copy a secret file to its destination with specified permissions and optional ownership.
 pub fn run(args: &Args) -> Result<ExitCode> {
     if let Some(parent) = args.dest.parent() {
@@ -40,7 +45,7 @@ pub fn run(args: &Args) -> Result<ExitCode> {
         )
     })?;
 
-    let mode = u32::from_str_radix(args.mode.trim_start_matches('0'), 8)
+    let mode = parse_octal_mode(&args.mode)
         .with_context(|| format!("parsing mode '{}'", args.mode))?;
     fs::set_permissions(&args.dest, fs::Permissions::from_mode(mode))
         .with_context(|| format!("chmod {} {}", args.mode, args.dest.display()))?;
@@ -206,5 +211,31 @@ mod tests {
         assert!(result.is_err());
 
         let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn parse_octal_mode_standard() {
+        assert_eq!(parse_octal_mode("0600").unwrap(), 0o600);
+        assert_eq!(parse_octal_mode("0644").unwrap(), 0o644);
+        assert_eq!(parse_octal_mode("0755").unwrap(), 0o755);
+        assert_eq!(parse_octal_mode("0400").unwrap(), 0o400);
+    }
+
+    #[test]
+    fn parse_octal_mode_without_leading_zero() {
+        assert_eq!(parse_octal_mode("600").unwrap(), 0o600);
+        assert_eq!(parse_octal_mode("644").unwrap(), 0o644);
+    }
+
+    #[test]
+    fn parse_octal_mode_multiple_leading_zeros() {
+        assert_eq!(parse_octal_mode("00600").unwrap(), 0o600);
+    }
+
+    #[test]
+    fn parse_octal_mode_invalid() {
+        assert!(parse_octal_mode("xyz").is_err());
+        assert!(parse_octal_mode("").is_err());
+        assert!(parse_octal_mode("999").is_err());
     }
 }
