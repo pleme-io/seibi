@@ -177,3 +177,132 @@ fn expand_tilde(path: &str, home: &str) -> PathBuf {
         PathBuf::from(path)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::fs;
+
+    #[test]
+    fn expand_tilde_with_home_prefix() {
+        let result = expand_tilde("~/projects", "/home/alice");
+        assert_eq!(result, PathBuf::from("/home/alice/projects"));
+    }
+
+    #[test]
+    fn expand_tilde_absolute_path_unchanged() {
+        let result = expand_tilde("/var/data", "/home/alice");
+        assert_eq!(result, PathBuf::from("/var/data"));
+    }
+
+    #[test]
+    fn expand_tilde_relative_path_unchanged() {
+        let result = expand_tilde("relative/path", "/home/alice");
+        assert_eq!(result, PathBuf::from("relative/path"));
+    }
+
+    #[test]
+    fn find_rust_targets_detects_target_with_cargo_toml() {
+        let dir = std::env::temp_dir().join("seibi-test-find-targets");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("myproject/target")).unwrap();
+        fs::write(dir.join("myproject/Cargo.toml"), "[package]\nname = \"test\"").unwrap();
+
+        let mut results = Vec::new();
+        find_rust_targets(&dir, 0, 4, &mut results);
+        assert_eq!(results.len(), 1);
+        assert!(results[0].ends_with("target"));
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn find_rust_targets_ignores_target_without_cargo_toml() {
+        let dir = std::env::temp_dir().join("seibi-test-find-no-cargo");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("random/target")).unwrap();
+
+        let mut results = Vec::new();
+        find_rust_targets(&dir, 0, 4, &mut results);
+        assert!(results.is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn find_rust_targets_skips_hidden_directories() {
+        let dir = std::env::temp_dir().join("seibi-test-find-hidden");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join(".hidden/project/target")).unwrap();
+        fs::write(dir.join(".hidden/project/Cargo.toml"), "[package]").unwrap();
+
+        let mut results = Vec::new();
+        find_rust_targets(&dir, 0, 4, &mut results);
+        assert!(results.is_empty());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn find_rust_targets_respects_max_depth() {
+        let dir = std::env::temp_dir().join("seibi-test-find-depth");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("a/b/c/project/target")).unwrap();
+        fs::write(dir.join("a/b/c/project/Cargo.toml"), "[package]").unwrap();
+
+        let mut results = Vec::new();
+        find_rust_targets(&dir, 0, 2, &mut results);
+        assert!(results.is_empty(), "should not find target beyond max_depth=2");
+
+        let mut results = Vec::new();
+        find_rust_targets(&dir, 0, 5, &mut results);
+        assert_eq!(results.len(), 1, "should find target with sufficient depth");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dir_size_empty_dir() {
+        let dir = std::env::temp_dir().join("seibi-test-dirsize-empty");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        assert_eq!(dir_size(&dir), 0);
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dir_size_with_files() {
+        let dir = std::env::temp_dir().join("seibi-test-dirsize-files");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(dir.join("a.txt"), "hello").unwrap();
+        fs::write(dir.join("b.txt"), "world!").unwrap();
+
+        let size = dir_size(&dir);
+        assert_eq!(size, 11); // 5 + 6 bytes
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dir_size_recursive() {
+        let dir = std::env::temp_dir().join("seibi-test-dirsize-recursive");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(dir.join("sub")).unwrap();
+        fs::write(dir.join("a.txt"), "abc").unwrap();
+        fs::write(dir.join("sub/b.txt"), "defgh").unwrap();
+
+        let size = dir_size(&dir);
+        assert_eq!(size, 8); // 3 + 5 bytes
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dir_size_nonexistent() {
+        let dir = std::env::temp_dir().join("seibi-test-dirsize-nonexistent");
+        assert_eq!(dir_size(&dir), 0);
+    }
+}

@@ -105,3 +105,61 @@ fn read_token(path: &std::path::Path) -> Result<String> {
         .map(|s| s.trim().to_owned())
         .with_context(|| format!("reading token from {}", path.display()))
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn read_token_trims_whitespace() {
+        let dir = std::env::temp_dir().join("seibi-test-ddns-token");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let path = dir.join("token");
+        fs::write(&path, "  my-api-token  \n").unwrap();
+
+        let token = read_token(&path).unwrap();
+        assert_eq!(token, "my-api-token");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn read_token_missing_file_returns_error() {
+        let result = read_token(std::path::Path::new("/nonexistent/token"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn read_token_empty_file_returns_empty() {
+        let dir = std::env::temp_dir().join("seibi-test-ddns-empty");
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+
+        let path = dir.join("token");
+        fs::write(&path, "").unwrap();
+
+        let token = read_token(&path).unwrap();
+        assert_eq!(token, "");
+
+        let _ = fs::remove_dir_all(&dir);
+    }
+
+    #[test]
+    fn dns_record_serialization() {
+        let record = DnsRecord {
+            record_type: "A",
+            name: "home.example.com".into(),
+            content: "1.2.3.4".into(),
+            ttl: 120,
+            proxied: false,
+        };
+        let json = serde_json::to_string(&record).unwrap();
+        assert!(json.contains("\"type\":\"A\""));
+        assert!(json.contains("\"name\":\"home.example.com\""));
+        assert!(json.contains("\"content\":\"1.2.3.4\""));
+        assert!(json.contains("\"ttl\":120"));
+        assert!(json.contains("\"proxied\":false"));
+    }
+}

@@ -543,4 +543,103 @@ mod tests {
 
         let _ = fs::remove_dir_all(&dir);
     }
+
+    #[test]
+    fn parse_handshake_single_second() {
+        assert_eq!(
+            parse_duration_ago("1 second ago"),
+            Some(Duration::from_secs(1))
+        );
+    }
+
+    #[test]
+    fn parse_handshake_days() {
+        assert_eq!(
+            parse_duration_ago("1 day, 2 hours, 3 minutes ago"),
+            Some(Duration::from_secs(86400 + 7200 + 180))
+        );
+    }
+
+    #[test]
+    fn parse_handshake_unknown_unit() {
+        assert_eq!(parse_duration_ago("5 weeks ago"), None);
+    }
+
+    #[test]
+    fn parse_handshake_empty_string() {
+        assert_eq!(parse_duration_ago(""), None);
+    }
+
+    #[test]
+    fn parse_handshake_zero_seconds() {
+        assert_eq!(parse_duration_ago("0 seconds ago"), None);
+    }
+
+    #[test]
+    fn parse_latest_handshake_from_wg_output() {
+        let output = "\
+interface: wg-test
+  public key: AAAA=
+  private key: (hidden)
+  listening port: 51820
+
+peer: BBBB=
+  endpoint: 1.2.3.4:51820
+  allowed ips: 10.0.0.0/24
+  latest handshake: 45 seconds ago
+  transfer: 1.23 MiB received, 4.56 MiB sent
+";
+        assert_eq!(
+            parse_latest_handshake(output),
+            Some(Duration::from_secs(45))
+        );
+    }
+
+    #[test]
+    fn parse_latest_handshake_missing() {
+        let output = "\
+interface: wg-test
+  public key: AAAA=
+  listening port: 51820
+
+peer: BBBB=
+  endpoint: 1.2.3.4:51820
+";
+        assert_eq!(parse_latest_handshake(output), None);
+    }
+
+    #[test]
+    fn parse_transfer_missing() {
+        let output = "interface: wg-test\n  public key: AAAA=\n";
+        assert_eq!(parse_transfer(output), None);
+    }
+
+    #[test]
+    fn parse_transfer_with_whitespace() {
+        let output = "  transfer:   100 B received, 200 B sent  \n";
+        assert_eq!(
+            parse_transfer(output),
+            Some("100 B received, 200 B sent".to_owned())
+        );
+    }
+
+    #[test]
+    fn resolve_config_key_file_missing_returns_error() {
+        let config = "[Interface]\nPrivateKey = PLACEHOLDER_REPLACED_BY_POSTUP\n";
+        let result = resolve_config(config, Path::new("/nonexistent/key"));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn resolve_empty_config() {
+        let dir = std::env::temp_dir().join("seibi-test-resolve-empty");
+        let _ = fs::create_dir_all(&dir);
+        let key_path = dir.join("private.key");
+        fs::write(&key_path, "somekey=\n").unwrap();
+
+        let result = resolve_config("", &key_path).unwrap();
+        assert!(result.is_none());
+
+        let _ = fs::remove_dir_all(&dir);
+    }
 }

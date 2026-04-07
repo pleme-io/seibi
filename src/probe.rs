@@ -97,3 +97,45 @@ async fn check_systemd(unit: &str) -> ProbeResult {
         },
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn probe_name_ping() {
+        let probe = Probe::Ping {
+            target: "8.8.8.8".into(),
+        };
+        assert_eq!(probe.name(), "network");
+    }
+
+    #[test]
+    fn probe_name_wifi() {
+        let probe = Probe::Wifi {
+            interface: "wlan0".into(),
+        };
+        assert_eq!(probe.name(), "wifi");
+    }
+
+    #[test]
+    fn probe_name_systemd_returns_unit_name() {
+        let probe = Probe::Systemd {
+            unit: "k3s.service".into(),
+        };
+        assert_eq!(probe.name(), "k3s.service");
+    }
+
+    #[test]
+    fn probe_name_systemd_different_units() {
+        let probe = Probe::Systemd {
+            unit: "nginx.service".into(),
+        };
+        assert_eq!(probe.name(), "nginx.service");
+
+        let probe = Probe::Systemd {
+            unit: "docker.service".into(),
+        };
+        assert_eq!(probe.name(), "docker.service");
+    }
+}
