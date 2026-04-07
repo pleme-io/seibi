@@ -1,10 +1,48 @@
-use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
 use std::fs;
 use std::os::unix::fs::PermissionsExt;
 use std::path::PathBuf;
 use std::process::ExitCode;
 use tracing::info;
+
+#[derive(Debug, thiserror::Error)]
+enum DeployError {
+    #[error("creating directory {path}: {source}")]
+    MkdirFailed {
+        path: PathBuf,
+        source: std::io::Error,
+    },
+
+    #[error("copying {src} → {dst}: {source}")]
+    CopyFailed {
+        src: PathBuf,
+        dst: PathBuf,
+        source: std::io::Error,
+    },
+
+    #[error("parsing mode '{mode}'")]
+    InvalidMode {
+        mode: String,
+        source: std::num::ParseIntError,
+    },
+
+    #[error("chmod {mode} {path}: {source}")]
+    ChmodFailed {
+        mode: String,
+        path: PathBuf,
+        source: std::io::Error,
+    },
+
+    #[error("chown {owner} {path} failed")]
+    ChownFailed { owner: String, path: PathBuf },
+
+    #[error("running chown {owner} {path}: {source}")]
+    ChownExec {
+        owner: String,
+        path: PathBuf,
+        source: std::io::Error,
+    },
+}
 
 #[derive(ClapArgs)]
 pub struct Args {
@@ -25,33 +63,50 @@ pub struct Args {
     owner: Option<String>,
 }
 
-pub async fn run(args: Args) -> Result<ExitCode> {
+pub async fn run(args: Args) -> Result<ExitCode, anyhow::Error> {
     if let Some(parent) = args.dest.parent() {
-        fs::create_dir_all(parent)
-            .with_context(|| format!("creating directory {}", parent.display()))?;
+        fs::create_dir_all(parent).map_err(|source| DeployError::MkdirFailed {
+            path: parent.to_path_buf(),
+            source,
+        })?;
     }
 
-    fs::copy(&args.source, &args.dest).with_context(|| {
-        format!(
-            "copying {} → {}",
-            args.source.display(),
-            args.dest.display()
-        )
+    fs::copy(&args.source, &args.dest).map_err(|source| DeployError::CopyFailed {
+        src: args.source.clone(),
+        dst: args.dest.clone(),
+        source,
     })?;
 
-    let mode = u32::from_str_radix(args.mode.trim_start_matches('0'), 8)
-        .with_context(|| format!("parsing mode '{}'", args.mode))?;
-    fs::set_permissions(&args.dest, fs::Permissions::from_mode(mode))
-        .with_context(|| format!("chmod {} {}", args.mode, args.dest.display()))?;
+    let mode = u32::from_str_radix(args.mode.trim_start_matches('0'), 8).map_err(|source| {
+        DeployError::InvalidMode {
+            mode: args.mode.clone(),
+            source,
+        }
+    })?;
+    fs::set_permissions(&args.dest, fs::Permissions::from_mode(mode)).map_err(|source| {
+        DeployError::ChmodFailed {
+            mode: args.mode.clone(),
+            path: args.dest.clone(),
+            source,
+        }
+    })?;
 
     if let Some(ref owner) = args.owner {
         let status = std::process::Command::new("chown")
             .arg(owner)
             .arg(&args.dest)
             .status()
-            .with_context(|| format!("running chown {owner} {}", args.dest.display()))?;
+            .map_err(|source| DeployError::ChownExec {
+                owner: owner.clone(),
+                path: args.dest.clone(),
+                source,
+            })?;
         if !status.success() {
-            anyhow::bail!("chown {owner} {} failed", args.dest.display());
+            return Err(DeployError::ChownFailed {
+                owner: owner.clone(),
+                path: args.dest.clone(),
+            }
+            .into());
         }
     }
 
