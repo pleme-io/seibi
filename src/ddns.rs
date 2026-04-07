@@ -82,8 +82,9 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         .context("updating Cloudflare DNS")?;
 
     if !resp.status().is_success() {
+        let status = resp.status();
         let body = resp.text().await.unwrap_or_default();
-        anyhow::bail!("Cloudflare API error: {body}");
+        anyhow::bail!("Cloudflare API error ({status}): {body}");
     }
 
     if let Some(parent) = args.state_file.parent() {
