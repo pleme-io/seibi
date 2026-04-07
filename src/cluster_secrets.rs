@@ -1,6 +1,6 @@
 use anyhow::Result;
 use clap::Args as ClapArgs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use tracing::info;
 
@@ -55,8 +55,8 @@ fn find_git_root() -> Option<PathBuf> {
 
 /// Try each SOPS extract path, return the first non-empty value.
 async fn try_extract(
-    secrets_file: &PathBuf,
-    age_key_file: &PathBuf,
+    secrets_file: &Path,
+    age_key_file: &Path,
     paths: &[&str],
     cluster: &str,
 ) -> Option<String> {

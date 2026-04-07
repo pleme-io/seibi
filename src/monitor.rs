@@ -17,6 +17,16 @@ enum Health {
     Unhealthy,
 }
 
+impl std::fmt::Display for Health {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unknown => f.write_str("Unknown"),
+            Self::Healthy => f.write_str("Healthy"),
+            Self::Unhealthy => f.write_str("Unhealthy"),
+        }
+    }
+}
+
 #[derive(ClapArgs)]
 pub struct Args {
     /// Discord webhook URL

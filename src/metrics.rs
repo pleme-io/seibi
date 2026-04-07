@@ -15,8 +15,29 @@ pub struct SystemMetrics {
     pub ip_address: String,
 }
 
+impl Default for SystemMetrics {
+    fn default() -> Self {
+        Self {
+            uptime: "N/A".into(),
+            load_avg: "N/A".into(),
+            memory_used: "N/A".into(),
+            memory_total: "N/A".into(),
+            disk_used: "N/A".into(),
+            disk_total: "N/A".into(),
+            disk_percent: "N/A".into(),
+            cpu_temp: "N/A".into(),
+            battery_level: "N/A".into(),
+            battery_status: "N/A".into(),
+            wifi_status: "N/A".into(),
+            wifi_ssid: "N/A".into(),
+            ip_address: "N/A".into(),
+        }
+    }
+}
+
 impl SystemMetrics {
     #[cfg(target_os = "linux")]
+    #[must_use]
     pub fn collect() -> Self {
         let (memory_used, memory_total) =
             read_memory().unwrap_or_else(|| ("N/A".into(), "N/A".into()));
@@ -41,25 +62,13 @@ impl SystemMetrics {
     }
 
     #[cfg(not(target_os = "linux"))]
+    #[must_use]
     pub fn collect() -> Self {
-        Self {
-            uptime: "N/A".into(),
-            load_avg: "N/A".into(),
-            memory_used: "N/A".into(),
-            memory_total: "N/A".into(),
-            disk_used: "N/A".into(),
-            disk_total: "N/A".into(),
-            disk_percent: "N/A".into(),
-            cpu_temp: "N/A".into(),
-            battery_level: "N/A".into(),
-            battery_status: "N/A".into(),
-            wifi_status: "N/A".into(),
-            wifi_ssid: "N/A".into(),
-            ip_address: "N/A".into(),
-        }
+        Self::default()
     }
 
     /// Returns a human-readable health label.
+    #[must_use]
     pub fn health_assessment(&self) -> &'static str {
         if self.wifi_status.contains("Disconnected") {
             return "Network Down";
@@ -111,6 +120,15 @@ mod tests {
         };
         overrides(&mut m);
         m
+    }
+
+    #[test]
+    fn default_returns_all_na() {
+        let m = SystemMetrics::default();
+        assert_eq!(m.uptime, "N/A");
+        assert_eq!(m.load_avg, "N/A");
+        assert_eq!(m.memory_used, "N/A");
+        assert_eq!(m.ip_address, "N/A");
     }
 
     #[test]
@@ -423,12 +441,9 @@ fn read_load_avg() -> String {
     fs::read_to_string("/proc/loadavg")
         .ok()
         .and_then(|s| {
-            let f: Vec<&str> = s.split_whitespace().collect();
-            if f.len() >= 3 {
-                Some(format!("{}, {}, {}", f[0], f[1], f[2]))
-            } else {
-                None
-            }
+            let mut fields = s.split_whitespace();
+            let (a, b, c) = (fields.next()?, fields.next()?, fields.next()?);
+            Some(format!("{a}, {b}, {c}"))
         })
         .unwrap_or_else(|| "N/A".into())
 }
@@ -468,14 +483,13 @@ fn read_disk() -> Option<(String, String, String)> {
     let output = Command::new("df").args(["-B1", "/"]).output().ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
     let line = text.lines().nth(1)?;
-    let fields: Vec<&str> = line.split_whitespace().collect();
-    if fields.len() >= 5 {
-        let total: u64 = fields[1].parse().ok()?;
-        let used: u64 = fields[2].parse().ok()?;
-        Some((format_bytes(used), format_bytes(total), fields[4].to_owned()))
-    } else {
-        None
-    }
+    let mut fields = line.split_whitespace();
+    let _fs = fields.next()?;
+    let total: u64 = fields.next()?.parse().ok()?;
+    let used: u64 = fields.next()?.parse().ok()?;
+    let _avail = fields.next()?;
+    let percent = fields.next()?;
+    Some((format_bytes(used), format_bytes(total), percent.to_owned()))
 }
 
 #[cfg(target_os = "linux")]

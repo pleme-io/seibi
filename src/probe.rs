@@ -1,3 +1,4 @@
+use std::fmt;
 use std::process::Stdio;
 use tokio::process::Command;
 
@@ -7,14 +8,29 @@ pub struct ProbeResult {
     pub detail: String,
 }
 
+impl fmt::Display for ProbeResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let status = if self.healthy { "ok" } else { "FAIL" };
+        write!(f, "[{status}] {}", self.detail)
+    }
+}
+
 /// A health-check probe that can test network, wifi, or systemd unit status.
+#[non_exhaustive]
 pub enum Probe {
     Ping { target: String },
     Wifi { interface: String },
     Systemd { unit: String },
 }
 
+impl fmt::Display for Probe {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
+}
+
 impl Probe {
+    #[must_use]
     pub fn name(&self) -> &str {
         match self {
             Self::Ping { .. } => "network",
@@ -139,6 +155,37 @@ mod tests {
             unit: "docker.service".into(),
         };
         assert_eq!(probe.name(), "docker.service");
+    }
+
+    #[test]
+    fn probe_display_matches_name() {
+        let probe = Probe::Ping {
+            target: "8.8.8.8".into(),
+        };
+        assert_eq!(probe.to_string(), "network");
+
+        let probe = Probe::Wifi {
+            interface: "wlan0".into(),
+        };
+        assert_eq!(probe.to_string(), "wifi");
+    }
+
+    #[test]
+    fn probe_result_display_healthy() {
+        let r = ProbeResult {
+            healthy: true,
+            detail: "ping 8.8.8.8 ok".into(),
+        };
+        assert_eq!(r.to_string(), "[ok] ping 8.8.8.8 ok");
+    }
+
+    #[test]
+    fn probe_result_display_unhealthy() {
+        let r = ProbeResult {
+            healthy: false,
+            detail: "ping 8.8.8.8 failed".into(),
+        };
+        assert_eq!(r.to_string(), "[FAIL] ping 8.8.8.8 failed");
     }
 
     #[tokio::test]
