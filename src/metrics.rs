@@ -389,13 +389,10 @@ fn read_uptime() -> String {
 fn read_load_avg() -> String {
     fs::read_to_string("/proc/loadavg")
         .ok()
-        .map(|s| {
-            let f: Vec<&str> = s.split_whitespace().collect();
-            if f.len() >= 3 {
-                format!("{}, {}, {}", f[0], f[1], f[2])
-            } else {
-                "N/A".into()
-            }
+        .and_then(|s| {
+            let mut fields = s.split_whitespace();
+            let (a, b, c) = (fields.next()?, fields.next()?, fields.next()?);
+            Some(format!("{a}, {b}, {c}"))
         })
         .unwrap_or_else(|| "N/A".into())
 }
@@ -435,14 +432,13 @@ fn read_disk() -> Option<(String, String, String)> {
     let output = Command::new("df").args(["-B1", "/"]).output().ok()?;
     let text = String::from_utf8_lossy(&output.stdout);
     let line = text.lines().nth(1)?;
-    let fields: Vec<&str> = line.split_whitespace().collect();
-    if fields.len() >= 5 {
-        let total: u64 = fields[1].parse().ok()?;
-        let used: u64 = fields[2].parse().ok()?;
-        Some((format_bytes(used), format_bytes(total), fields[4].to_owned()))
-    } else {
-        None
-    }
+    let mut fields = line.split_whitespace();
+    let _fs = fields.next()?;
+    let total: u64 = fields.next()?.parse().ok()?;
+    let used: u64 = fields.next()?.parse().ok()?;
+    let _avail = fields.next()?;
+    let percent = fields.next()?;
+    Some((format_bytes(used), format_bytes(total), percent.to_owned()))
 }
 
 #[cfg(target_os = "linux")]

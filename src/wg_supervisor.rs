@@ -111,7 +111,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
 
 // ── Key file wait ───────────────────────────────────────────────
 
-async fn wait_for_key(path: &PathBuf) {
+async fn wait_for_key(path: &Path) {
     if path.exists() {
         info!(path = %path.display(), "key file present");
         return;
@@ -297,7 +297,7 @@ async fn tunnel_up(wg_quick: &str, config: &Path, key_file: &Path) -> Result<()>
     }
 }
 
-async fn tunnel_down(wg_quick: &str, config: &PathBuf) {
+async fn tunnel_down(wg_quick: &str, config: &Path) {
     debug!(config = %config.display(), "tearing tunnel down");
     let result = Command::new(wg_quick)
         .args(["down", &config.display().to_string()])
