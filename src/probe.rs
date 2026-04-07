@@ -1,3 +1,4 @@
+use std::fmt;
 use std::process::Stdio;
 use tokio::process::Command;
 
@@ -11,6 +12,12 @@ pub enum Probe {
     Ping { target: String },
     Wifi { interface: String },
     Systemd { unit: String },
+}
+
+impl fmt::Display for Probe {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.name())
+    }
 }
 
 impl Probe {
@@ -139,5 +146,23 @@ mod tests {
             unit: "docker.service".into(),
         };
         assert_eq!(probe.name(), "docker.service");
+    }
+
+    #[test]
+    fn probe_display_matches_name() {
+        let probe = Probe::Ping {
+            target: "8.8.8.8".into(),
+        };
+        assert_eq!(probe.to_string(), "network");
+
+        let probe = Probe::Wifi {
+            interface: "wlan0".into(),
+        };
+        assert_eq!(probe.to_string(), "wifi");
+
+        let probe = Probe::Systemd {
+            unit: "k3s.service".into(),
+        };
+        assert_eq!(probe.to_string(), "k3s.service");
     }
 }
