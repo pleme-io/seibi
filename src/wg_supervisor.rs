@@ -55,14 +55,22 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         "wg-supervisor starting"
     );
 
-    // Phase 1: Wait for key file
+    // Phase 1: Wait for key file (sops-nix decrypts at rebuild time)
     wait_for_key(&args.key_file).await;
 
-    // Phase 2: Bring up the tunnel (tear down first if stale interface exists)
+    // Phase 2: Wait for endpoint DNS to resolve (infrastructure may be materializing)
+    // Extract endpoint from config, poll DNS until it resolves.
+    // This handles the case where seph.1 was just deployed and the NLB
+    // DNS hasn't propagated yet. Exponential backoff: 2s → 4s → 8s → ... → 60s max.
+    if let Some(endpoint) = extract_endpoint(&args.config) {
+        wait_for_dns(&endpoint).await;
+    }
+
+    // Phase 3: Bring up the tunnel (tear down first if stale interface exists)
     tunnel_down(&args.wg_quick, &args.config).await;
     tunnel_up(&args.wg_quick, &args.config, &args.key_file).await?;
 
-    // Phase 3: Supervision loop — run until signalled
+    // Phase 4: Supervision loop — run until signalled
     let mut interval = time::interval(check_interval);
     interval.tick().await; // consume the immediate first tick
 
@@ -99,8 +107,12 @@ pub async fn run(args: Args) -> Result<ExitCode> {
                         );
                     }
                     InterfaceStatus::Down => {
-                        warn!(interface = %args.interface, "interface down — restarting tunnel");
+                        warn!(interface = %args.interface, "interface down — converging back to connected state");
                         tunnel_down(&args.wg_quick, &args.config).await;
+                        // Re-check DNS before retry (infrastructure may have been destroyed/recreated)
+                        if let Some(ref endpoint) = extract_endpoint(&args.config) {
+                            wait_for_dns(endpoint).await;
+                        }
                         if let Err(e) = tunnel_up(&args.wg_quick, &args.config, &args.key_file).await {
                             error!(error = %e, "tunnel restart failed — will retry next interval");
                         }
@@ -132,6 +144,86 @@ async fn wait_for_key(path: &Path) {
             last_log = std::time::Instant::now();
         }
         time::sleep(Duration::from_secs(1)).await;
+    }
+}
+
+// ── DNS resolution wait ────────────────────────────────────────
+// Infrastructure may be materializing (NLB just created, DNS propagating).
+// This is convergence on the "connected" state — we keep trying regardless
+// of whether the infrastructure exists yet.
+
+/// Extract the Endpoint hostname from a wg-quick config file.
+fn extract_endpoint(config: &Path) -> Option<String> {
+    let text = fs::read_to_string(config).ok()?;
+    for line in text.lines() {
+        let trimmed = line.trim();
+        if let Some(rest) = trimmed.strip_prefix("Endpoint") {
+            let rest = rest.trim().strip_prefix('=')?.trim();
+            // Endpoint = hostname:port — extract just the hostname
+            let host = rest.split(':').next()?;
+            return Some(host.to_string());
+        }
+    }
+    None
+}
+
+/// Wait for a hostname to resolve via DNS. Exponential backoff: 2s → 60s max.
+/// Logs state at each attempt so operators can see convergence progress.
+async fn wait_for_dns(endpoint: &str) {
+    use std::net::ToSocketAddrs;
+
+    // Try immediate resolution
+    let probe = format!("{endpoint}:0");
+    if probe.to_socket_addrs().is_ok() {
+        info!(endpoint = %endpoint, "DNS resolved immediately");
+        return;
+    }
+
+    info!(
+        endpoint = %endpoint,
+        "DNS not yet resolvable — infrastructure may be materializing. \
+         Will poll with exponential backoff until resolved."
+    );
+
+    let mut backoff = Duration::from_secs(2);
+    let max_backoff = Duration::from_secs(60);
+    let mut attempts = 0u32;
+
+    loop {
+        time::sleep(backoff).await;
+        attempts += 1;
+
+        let probe = format!("{endpoint}:0");
+        match probe.to_socket_addrs() {
+            Ok(addrs) => {
+                let resolved: Vec<_> = addrs.collect();
+                info!(
+                    endpoint = %endpoint,
+                    attempts = attempts,
+                    resolved = ?resolved,
+                    "DNS resolved — infrastructure is reachable"
+                );
+                return;
+            }
+            Err(_) => {
+                if attempts % 5 == 0 {
+                    info!(
+                        endpoint = %endpoint,
+                        attempts = attempts,
+                        next_retry_secs = backoff.as_secs(),
+                        "DNS still unresolvable — continuing to converge"
+                    );
+                } else {
+                    debug!(
+                        endpoint = %endpoint,
+                        attempts = attempts,
+                        "DNS not yet resolved"
+                    );
+                }
+            }
+        }
+
+        backoff = (backoff * 2).min(max_backoff);
     }
 }
 
