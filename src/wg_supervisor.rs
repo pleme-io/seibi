@@ -70,15 +70,18 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     tunnel_down(&args.wg_quick, &args.config).await;
     tunnel_up(&args.wg_quick, &args.config, &args.key_file).await?;
 
-    // Phase 4: Supervision loop — run until signalled
+    // Phase 4: Supervision loop — run until signalled.
+    // Install the drain coordinator once; hold a single token whose `wait_ref`
+    // we poll in the select loop without reinstalling OS handlers each tick.
+    let mut drain_token = tsunagu::ShutdownController::install().token();
     let mut interval = time::interval(check_interval);
     interval.tick().await; // consume the immediate first tick
 
     loop {
         tokio::select! {
             biased;
-            () = shutdown_signal() => {
-                info!("received shutdown signal, tearing down tunnel");
+            () = drain_token.wait_ref() => {
+                info!("received drain signal, tearing down tunnel");
                 tunnel_down(&args.wg_quick, &args.config).await;
                 return Ok(ExitCode::SUCCESS);
             }
@@ -496,32 +499,6 @@ fn parse_transfer(wg_output: &str) -> Option<String> {
     None
 }
 
-// ── Signal handling ─────────────────────────────────────────────
-
-async fn shutdown_signal() {
-    use tokio::signal;
-
-    let ctrl_c = signal::ctrl_c();
-
-    #[cfg(unix)]
-    {
-        match signal::unix::signal(signal::unix::SignalKind::terminate()) {
-            Ok(mut sigterm) => {
-                tokio::select! {
-                    _ = ctrl_c => {}
-                    _ = sigterm.recv() => {}
-                }
-            }
-            Err(e) => {
-                tracing::warn!(error = %e, "failed to register SIGTERM handler, falling back to ctrl-c only");
-                ctrl_c.await.ok();
-            }
-        }
-    }
-
-    #[cfg(not(unix))]
-    ctrl_c.await.ok();
-}
 
 #[cfg(test)]
 mod tests {
