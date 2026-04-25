@@ -1,11 +1,12 @@
 use anyhow::Result;
 use clap::Args as ClapArgs;
 use std::collections::BTreeMap;
-use std::process::{Command, ExitCode, Stdio};
+use std::process::ExitCode;
 use std::time::Duration;
 use tokio::time;
 use tracing::{info, warn};
 
+use crate::disk_pressure::{DiskPressureState, DiskTransition, spawn_pressure_command};
 use crate::metrics::{SystemMetrics, read_disk_percent_root};
 use crate::probe::Probe;
 use crate::webhook::{self, Webhook};
@@ -213,101 +214,5 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         }
 
         time::sleep(probe_interval).await;
-    }
-}
-
-/// State machine for the disk-pressure trigger. Fires `Pressured` once when
-/// usage rises above `threshold`, then waits for usage to drop below `clear`
-/// (the hysteresis margin) before it'll fire again.
-#[derive(Debug, Default)]
-struct DiskPressureState {
-    above_threshold: bool,
-}
-
-#[derive(Debug, PartialEq, Eq)]
-enum DiskTransition {
-    Pressured,
-    Cleared,
-}
-
-impl DiskPressureState {
-    fn new() -> Self {
-        Self::default()
-    }
-
-    fn observe(&mut self, current: f64, threshold: f64, clear: f64) -> Option<DiskTransition> {
-        if current >= threshold && !self.above_threshold {
-            self.above_threshold = true;
-            return Some(DiskTransition::Pressured);
-        }
-        if current < clear && self.above_threshold {
-            self.above_threshold = false;
-            return Some(DiskTransition::Cleared);
-        }
-        None
-    }
-}
-
-/// Spawn a whitespace-tokenised command line detached from the probe loop.
-/// We deliberately don't pull in a full shlex parser — the trigger is
-/// configured in declarative Nix and the command lines are short, so
-/// "split on whitespace" is the contract.
-fn spawn_pressure_command(cmdline: &str) {
-    let mut parts = cmdline.split_whitespace();
-    let Some(program) = parts.next() else {
-        warn!("on-disk-pressure entry is empty — skipping");
-        return;
-    };
-    let argv: Vec<&str> = parts.collect();
-    match Command::new(program)
-        .args(&argv)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .spawn()
-    {
-        Ok(child) => info!(program, args = ?argv, pid = child.id(), "spawned pressure command"),
-        Err(e) => warn!(program, error = %e, "failed to spawn pressure command"),
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn pressured_fires_once_on_crossing() {
-        let mut s = DiskPressureState::new();
-        assert_eq!(s.observe(70.0, 85.0, 80.0), None);
-        assert_eq!(s.observe(86.0, 85.0, 80.0), Some(DiskTransition::Pressured));
-        // Stays above — must not refire
-        assert_eq!(s.observe(90.0, 85.0, 80.0), None);
-        assert_eq!(s.observe(86.0, 85.0, 80.0), None);
-    }
-
-    #[test]
-    fn cleared_only_below_hysteresis_floor() {
-        let mut s = DiskPressureState::new();
-        s.observe(86.0, 85.0, 80.0);
-        // Drop just below threshold but above clear — still pressured
-        assert_eq!(s.observe(82.0, 85.0, 80.0), None);
-        // Drop below clear — fires Cleared
-        assert_eq!(s.observe(79.0, 85.0, 80.0), Some(DiskTransition::Cleared));
-        // Re-cross — fires again
-        assert_eq!(s.observe(86.0, 85.0, 80.0), Some(DiskTransition::Pressured));
-    }
-
-    #[test]
-    fn at_exactly_threshold_is_pressured() {
-        let mut s = DiskPressureState::new();
-        assert_eq!(s.observe(85.0, 85.0, 80.0), Some(DiskTransition::Pressured));
-    }
-
-    #[test]
-    fn never_above_means_no_clear_event() {
-        let mut s = DiskPressureState::new();
-        // Going below "clear" without ever being pressured emits nothing
-        assert_eq!(s.observe(50.0, 85.0, 80.0), None);
-        assert_eq!(s.observe(10.0, 85.0, 80.0), None);
     }
 }

@@ -10,6 +10,7 @@ mod cluster_secrets;
 mod ddns;
 mod deploy_secret;
 mod direnv_prune;
+mod disk_pressure;
 mod helm_auth;
 mod kubeconfig;
 mod kubeconfig_rename;
@@ -25,6 +26,7 @@ mod sops_edit;
 mod sops_key;
 mod spotlight_sync;
 mod sweep;
+mod watch;
 mod webhook;
 mod wg_supervisor;
 
@@ -81,6 +83,9 @@ enum Command {
     ClaudeVmPrune(claude_vm_prune::Args),
     /// Run every cleanup subcommand in dependency order (`--dry-run` propagates)
     Sweep(sweep::Args),
+    /// Lightweight disk-pressure-only daemon (no webhooks). Peer of `monitor`
+    /// for hosts that just want disk-pressure cleanup.
+    Watch(watch::Args),
     /// Long-running `WireGuard` tunnel supervisor (key wait, health, auto-restart)
     WgSupervisor(wg_supervisor::Args),
 }
@@ -121,6 +126,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::DirenvPrune(args) => direnv_prune::run(&args),
         Command::ClaudeVmPrune(args) => claude_vm_prune::run(&args),
         Command::Sweep(args) => sweep::run(&args),
+        Command::Watch(args) => watch::run(args).await,
         Command::WgSupervisor(args) => wg_supervisor::run(args).await,
     }
 }
