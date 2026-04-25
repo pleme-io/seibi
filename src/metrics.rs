@@ -98,6 +98,36 @@ fn parse_battery_percent(s: &str) -> Option<u32> {
     s.trim_end_matches('%').trim().parse().ok()
 }
 
+/// Read root-filesystem usage as a percentage (0.0..=100.0). Cross-platform via
+/// POSIX `df -P /`. Returns `None` if `df` fails or the output can't be parsed.
+///
+/// Lives outside `SystemMetrics::collect` so the monitor daemon can poll it
+/// every probe iteration on macOS — the existing collect() returns all-`N/A`
+/// off-Linux, which is fine for the Discord report but useless for thresholding.
+#[must_use]
+pub fn read_disk_percent_root() -> Option<f64> {
+    let out = std::process::Command::new("df")
+        .args(["-P", "/"])
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let stdout = std::str::from_utf8(&out.stdout).ok()?;
+    parse_df_p_capacity(stdout)
+}
+
+/// Parse the `Capacity` column from `df -P /` output. Exposed for testing.
+fn parse_df_p_capacity(df_output: &str) -> Option<f64> {
+    // Skip the header line; the data line has the form:
+    //   /dev/disk3s7  1024-blocks  Used  Available  Capacity%  /
+    let data = df_output.lines().nth(1)?;
+    // Capacity is the 5th whitespace-separated column when filesystem path
+    // has no spaces. macOS / Linux both honour this layout under POSIX mode.
+    let cap = data.split_whitespace().nth(4)?;
+    cap.trim_end_matches('%').parse::<f64>().ok()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -265,6 +295,39 @@ mod tests {
     }
 
     #[test]
+    fn parse_df_capacity_macos_layout() {
+        let out = "Filesystem    1024-blocks      Used Available Capacity Mounted on\n\
+                   /dev/disk3s7    482449868 414117088  64692632     87% /\n";
+        assert_eq!(parse_df_p_capacity(out), Some(87.0));
+    }
+
+    #[test]
+    fn parse_df_capacity_linux_layout() {
+        let out = "Filesystem     1024-blocks    Used Available Capacity Mounted on\n\
+                   /dev/sda1         51475068 7654321  41201234      16% /\n";
+        assert_eq!(parse_df_p_capacity(out), Some(16.0));
+    }
+
+    #[test]
+    fn parse_df_capacity_full() {
+        let out = "Filesystem 1024-blocks Used Available Capacity Mounted on\n\
+                   tmpfs             100  100         0    100% /\n";
+        assert_eq!(parse_df_p_capacity(out), Some(100.0));
+    }
+
+    #[test]
+    fn parse_df_capacity_missing_data_line_returns_none() {
+        let out = "Filesystem 1024-blocks Used Available Capacity Mounted on\n";
+        assert_eq!(parse_df_p_capacity(out), None);
+    }
+
+    #[test]
+    fn parse_df_capacity_garbage_returns_none() {
+        assert_eq!(parse_df_p_capacity(""), None);
+        assert_eq!(parse_df_p_capacity("not df output"), None);
+    }
+
+    #[test]
     fn collect_non_linux_returns_na() {
         #[cfg(not(target_os = "linux"))]
         {
@@ -312,10 +375,7 @@ mod tests {
 
         #[test]
         fn format_bytes_petabytes() {
-            assert_eq!(
-                format_bytes(1024u64 * 1024 * 1024 * 1024 * 1024),
-                "1.0 PB"
-            );
+            assert_eq!(format_bytes(1024u64 * 1024 * 1024 * 1024 * 1024), "1.0 PB");
         }
 
         #[test]
@@ -561,14 +621,13 @@ fn read_ip_address() -> String {
         .ok()
         .and_then(|o| {
             let text = String::from_utf8_lossy(&o.stdout).into_owned();
-            text.lines()
-                .find_map(|line| {
-                    let trimmed = line.trim();
-                    trimmed
-                        .strip_prefix("inet ")
-                        .and_then(|rest| rest.split('/').next())
-                        .map(String::from)
-                })
+            text.lines().find_map(|line| {
+                let trimmed = line.trim();
+                trimmed
+                    .strip_prefix("inet ")
+                    .and_then(|rest| rest.split('/').next())
+                    .map(String::from)
+            })
         })
         .unwrap_or_else(|| "N/A".into())
 }
