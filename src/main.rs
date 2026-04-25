@@ -5,6 +5,7 @@ use std::process::ExitCode;
 mod common;
 mod attic_push;
 mod auto_unlock;
+mod claude_vm_prune;
 mod cluster_secrets;
 mod ddns;
 mod deploy_secret;
@@ -23,6 +24,7 @@ mod rust_cleanup;
 mod sops_edit;
 mod sops_key;
 mod spotlight_sync;
+mod sweep;
 mod webhook;
 mod wg_supervisor;
 
@@ -75,6 +77,10 @@ enum Command {
     PodmanPrune(podman_prune::Args),
     /// Release stale `.direnv/flake-profile` GC roots so nix-gc can reclaim them
     DirenvPrune(direnv_prune::Args),
+    /// Reap stale Claude Desktop VM bundles (`~/Library/Application Support/Claude/vm_bundles`)
+    ClaudeVmPrune(claude_vm_prune::Args),
+    /// Run every cleanup subcommand in dependency order (`--dry-run` propagates)
+    Sweep(sweep::Args),
     /// Long-running `WireGuard` tunnel supervisor (key wait, health, auto-restart)
     WgSupervisor(wg_supervisor::Args),
 }
@@ -113,6 +119,8 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::NixGc(args) => nix_gc::run(&args),
         Command::PodmanPrune(args) => podman_prune::run(&args),
         Command::DirenvPrune(args) => direnv_prune::run(&args),
+        Command::ClaudeVmPrune(args) => claude_vm_prune::run(&args),
+        Command::Sweep(args) => sweep::run(&args),
         Command::WgSupervisor(args) => wg_supervisor::run(args).await,
     }
 }
