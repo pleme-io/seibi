@@ -57,7 +57,7 @@ pub struct Args {
     #[arg(long, default_value = "1800")]
     report_interval: u64,
 
-    /// Root-fs usage percentage that triggers `--on-disk-pressure` tasks.
+    /// Root-fs usage percentage that fires `--on-disk-pressure` commands.
     /// 0 disables the trigger entirely (default).
     #[arg(long, default_value_t = 0)]
     disk_threshold_percent: u32,
@@ -68,17 +68,16 @@ pub struct Args {
     #[arg(long)]
     disk_clear_percent: Option<u32>,
 
-    /// Comma-separated `teiki run <name>` task names to fire when the disk
-    /// crosses `--disk-threshold-percent`. Each task is spawned detached so
-    /// the probe loop keeps running.
+    /// Shell commands to fire when disk usage crosses `--disk-threshold-percent`.
+    /// Each value is split on whitespace (no quoting / shell expansion) and
+    /// spawned detached, so the probe loop keeps running. Pass the flag once
+    /// per command, or comma-separate multiple commands inside one flag.
+    /// Examples:
+    ///   --on-disk-pressure 'seibi nix-gc'
+    ///   --on-disk-pressure 'seibi nix-gc --keep-days 7'
+    ///   --on-disk-pressure 'teiki run sweep --json'
     #[arg(long, value_delimiter = ',')]
     on_disk_pressure: Vec<String>,
-
-    /// Path to the teiki binary used to fire `--on-disk-pressure` tasks.
-    /// Defaults to `teiki` resolved via PATH; override for testing or when
-    /// the daemon's PATH is hermetic.
-    #[arg(long, default_value = "teiki")]
-    teiki_bin: String,
 }
 
 /// Run the continuous monitoring daemon with periodic probes and reports.
@@ -158,11 +157,11 @@ pub async fn run(args: Args) -> Result<ExitCode> {
                     warn!(
                         disk_percent = pct,
                         threshold = args.disk_threshold_percent,
-                        tasks = ?args.on_disk_pressure,
-                        "disk pressure — firing cleanup tasks"
+                        commands = ?args.on_disk_pressure,
+                        "disk pressure — firing cleanup commands"
                     );
-                    for task in &args.on_disk_pressure {
-                        spawn_teiki_task(&args.teiki_bin, task);
+                    for cmdline in &args.on_disk_pressure {
+                        spawn_pressure_command(cmdline);
                     }
                     if let Err(e) = webhook
                         .event(
@@ -249,16 +248,26 @@ impl DiskPressureState {
     }
 }
 
-fn spawn_teiki_task(teiki_bin: &str, task: &str) {
-    match Command::new(teiki_bin)
-        .args(["run", task, "--json"])
+/// Spawn a whitespace-tokenised command line detached from the probe loop.
+/// We deliberately don't pull in a full shlex parser — the trigger is
+/// configured in declarative Nix and the command lines are short, so
+/// "split on whitespace" is the contract.
+fn spawn_pressure_command(cmdline: &str) {
+    let mut parts = cmdline.split_whitespace();
+    let Some(program) = parts.next() else {
+        warn!("on-disk-pressure entry is empty — skipping");
+        return;
+    };
+    let argv: Vec<&str> = parts.collect();
+    match Command::new(program)
+        .args(&argv)
         .stdin(Stdio::null())
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
     {
-        Ok(child) => info!(task, pid = child.id(), "spawned teiki task"),
-        Err(e) => warn!(task, error = %e, "failed to spawn teiki task"),
+        Ok(child) => info!(program, args = ?argv, pid = child.id(), "spawned pressure command"),
+        Err(e) => warn!(program, error = %e, "failed to spawn pressure command"),
     }
 }
 
