@@ -8,13 +8,16 @@ mod auto_unlock;
 mod cluster_secrets;
 mod ddns;
 mod deploy_secret;
+mod direnv_prune;
 mod helm_auth;
 mod kubeconfig;
 mod kubeconfig_rename;
 mod metrics;
 mod monitor;
 mod nic_tune;
+mod nix_gc;
 mod notify;
+mod podman_prune;
 mod probe;
 mod rust_cleanup;
 mod sops_edit;
@@ -66,6 +69,12 @@ enum Command {
     SpotlightSync(spotlight_sync::Args),
     /// Clean Rust target/ directories and cargo cache to reclaim disk space
     RustCleanup(rust_cleanup::Args),
+    /// Garbage-collect old Nix store generations (`nix-collect-garbage`)
+    NixGc(nix_gc::Args),
+    /// Prune unused Podman images, containers, and volumes
+    PodmanPrune(podman_prune::Args),
+    /// Release stale `.direnv/flake-profile` GC roots so nix-gc can reclaim them
+    DirenvPrune(direnv_prune::Args),
     /// Long-running `WireGuard` tunnel supervisor (key wait, health, auto-restart)
     WgSupervisor(wg_supervisor::Args),
 }
@@ -101,6 +110,9 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::AutoUnlock(args) => auto_unlock::run(&args),
         Command::SpotlightSync(args) => spotlight_sync::run(args).await,
         Command::RustCleanup(args) => rust_cleanup::run(&args),
+        Command::NixGc(args) => nix_gc::run(&args),
+        Command::PodmanPrune(args) => podman_prune::run(&args),
+        Command::DirenvPrune(args) => direnv_prune::run(&args),
         Command::WgSupervisor(args) => wg_supervisor::run(args).await,
     }
 }
