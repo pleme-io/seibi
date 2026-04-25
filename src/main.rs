@@ -10,8 +10,10 @@ mod ddns;
 mod deploy_secret;
 mod helm_auth;
 mod kubeconfig;
+mod kubeconfig_rename;
 mod metrics;
 mod monitor;
+mod nic_tune;
 mod notify;
 mod probe;
 mod rust_cleanup;
@@ -38,6 +40,10 @@ enum Command {
     Ddns(ddns::Args),
     /// Export K3s kubeconfig with detected node IP
     Kubeconfig(kubeconfig::Args),
+    /// Rename a kubeconfig context + cluster + user (idempotent, consistent)
+    KubeconfigRename(kubeconfig_rename::Args),
+    /// Tune a network interface for K8s/container workloads (i40e profile)
+    NicTune(nic_tune::Args),
     /// Generate Helm OCI registry auth config
     HelmAuth(helm_auth::Args),
     /// Push Nix store paths to Attic binary cache
@@ -82,6 +88,8 @@ async fn run(cmd: Command) -> Result<ExitCode> {
     match cmd {
         Command::Ddns(args) => ddns::run(args).await,
         Command::Kubeconfig(args) => kubeconfig::run(args).await,
+        Command::KubeconfigRename(args) => kubeconfig_rename::run(args).await,
+        Command::NicTune(args) => nic_tune::run(args).await,
         Command::HelmAuth(args) => helm_auth::run(&args),
         Command::AtticPush(args) => attic_push::run(&args),
         Command::Notify(args) => notify::run(args).await,
