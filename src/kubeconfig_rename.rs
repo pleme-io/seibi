@@ -44,21 +44,39 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     let from = &args.from;
     let to = &args.to;
 
-    // 1. Rename the cluster + user `name: <from>` lines via sed.
-    //    kubectl has no `config rename-cluster` / `rename-user`, so we
-    //    edit the YAML directly. The pattern matches `^\s*name: <from>$`
-    //    so it catches both top-level (`clusters[].name`, `users[].name`)
-    //    AND will NOT match `cluster: default` / `user: default` lines
+    // 1. Rename the cluster + user `name: <from>` lines via sed, plus
+    //    rewrite the top-level `current-context: <from>`. kubectl has no
+    //    `config rename-cluster` / `rename-user`, so we edit the YAML
+    //    directly. The patterns match:
+    //      * `^\s*name: <from>$`        — cluster entry written as
+    //                                     `- cluster: …\n  name: <from>`
+    //      * `^\s*- name: <from>$`      — user entry written as
+    //                                     `- name: <from>` (list-item
+    //                                     shorthand — k3s emits this when
+    //                                     `name` is the FIRST key of the
+    //                                     mapping; the earlier sed missed
+    //                                     it because of the leading `- `)
+    //      * `^current-context: <from>$` — top-level setting that kubectl
+    //                                     does not let us rewrite via the
+    //                                     `config` subcommands without an
+    //                                     explicit destination context that
+    //                                     already exists; the safe play is
+    //                                     to rewrite it directly.
+    //    They will NOT match `cluster: default` / `user: default` lines
     //    inside contexts (those are the references we re-point in step 3).
-    let sed_pattern = format!(r"s/^\(\s*\)name: {}$/\1name: {}/", from, to);
+    let sed_pattern = format!(
+        r"s/^\(\s*\)name: {f}$/\1name: {t}/; s/^\(\s*\)- name: {f}$/\1- name: {t}/; s/^current-context: {f}$/current-context: {t}/",
+        f = from,
+        t = to,
+    );
     let status = Command::new("sed")
         .args(["-i", &sed_pattern, &kc])
         .status()
-        .context("running sed for cluster + user rename")?;
+        .context("running sed for cluster + user + current-context rename")?;
     if !status.success() {
         anyhow::bail!("sed exited with status {}", status);
     }
-    info!(from = %from, to = %to, "renamed cluster + user `name:` lines");
+    info!(from = %from, to = %to, "renamed cluster + user + current-context");
 
     // 2. Rename the context itself (kubectl knows how — it's a top-level
     //    operation that doesn't touch references). Idempotent if `from`

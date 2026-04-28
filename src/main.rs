@@ -21,6 +21,7 @@ mod nix_gc;
 mod notify;
 mod podman_prune;
 mod probe;
+mod reconverge;
 mod rust_cleanup;
 mod sops_edit;
 mod sops_key;
@@ -83,6 +84,11 @@ enum Command {
     ClaudeVmPrune(claude_vm_prune::Args),
     /// Run every cleanup subcommand in dependency order (`--dry-run` propagates)
     Sweep(sweep::Args),
+    /// Reconvergence daemon — assert intent against reality, remediate detected drift.
+    /// Each recipe knows how to detect a known failure class and how to fix it; new
+    /// failure classes become single-function adds. Pair with a systemd timer for
+    /// continuous (~minute-granularity) Phase-8 reconvergence.
+    Reconverge(reconverge::Args),
     /// Lightweight disk-pressure-only daemon (no webhooks). Peer of `monitor`
     /// for hosts that just want disk-pressure cleanup.
     Watch(watch::Args),
@@ -126,6 +132,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::DirenvPrune(args) => direnv_prune::run(&args),
         Command::ClaudeVmPrune(args) => claude_vm_prune::run(&args),
         Command::Sweep(args) => sweep::run(&args),
+        Command::Reconverge(args) => reconverge::run(args).await,
         Command::Watch(args) => watch::run(args).await,
         Command::WgSupervisor(args) => wg_supervisor::run(args).await,
     }
