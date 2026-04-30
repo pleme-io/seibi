@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use std::process::ExitCode;
 
 mod common;
+mod argocd_sync;
 mod attic_push;
 mod auto_unlock;
 mod claude_vm_prune;
@@ -44,6 +45,13 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Trigger manual sync on one or more ArgoCD Applications.
+    /// Generic across akeyless ArgoCD work (cluster-generator-fanout
+    /// pattern); default `--cluster` targets us-east-1-cicd-eks where
+    /// argocd.akeyless.io lives. Pre-merge smoke-test path for
+    /// ApplicationSets that have been kubectl-applied directly into the
+    /// central ArgoCD's `argocd` namespace from a feature branch.
+    ArgocdSync(argocd_sync::Args),
     /// Update Cloudflare DNS with current public IP
     Ddns(ddns::Args),
     /// Export K3s kubeconfig with detected node IP
@@ -112,6 +120,7 @@ async fn main() -> ExitCode {
 
 async fn run(cmd: Command) -> Result<ExitCode> {
     match cmd {
+        Command::ArgocdSync(args) => argocd_sync::run(args).await,
         Command::Ddns(args) => ddns::run(args).await,
         Command::Kubeconfig(args) => kubeconfig::run(args).await,
         Command::KubeconfigRename(args) => kubeconfig_rename::run(args).await,
