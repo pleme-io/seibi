@@ -38,6 +38,23 @@ pub struct Args {
     /// Log warning if latest handshake exceeds this age (seconds)
     #[arg(long, default_value = "300")]
     handshake_stale: u64,
+
+    /// Skip the DNS-resolve precheck before bringing the tunnel up.
+    ///
+    /// JIT links use a wg-quick PreUp hook (e.g. `cordel portao-wake`)
+    /// which scales an upstream concentrator from desired=0 to 1 and is
+    /// itself responsible for materializing the endpoint's DNS record.
+    /// On a cold start, the DNS doesn't exist until the wake op runs —
+    /// so a precheck that blocks waiting for DNS deadlocks against the
+    /// PreUp that would create it.
+    ///
+    /// When this flag is set, the supervisor jumps straight to
+    /// `wg-quick up`; wg-quick's own DNS resolution step (under the
+    /// PreUp hook) is what determines whether the tunnel comes up.
+    /// Used by the portao JIT pattern; do NOT set for steady-state
+    /// links pointed at a long-lived endpoint.
+    #[arg(long, default_value_t = false)]
+    skip_dns_precheck: bool,
 }
 
 /// Run the `WireGuard` tunnel supervisor: wait for key, bring up tunnel, then
@@ -62,8 +79,19 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     // Extract endpoint from config, poll DNS until it resolves.
     // This handles the case where seph.1 was just deployed and the NLB
     // DNS hasn't propagated yet. Exponential backoff: 2s → 4s → 8s → ... → 60s max.
-    if let Some(endpoint) = extract_endpoint(&args.config) {
-        wait_for_dns(&endpoint).await;
+    //
+    // JIT links (--skip-dns-precheck) bypass this entirely: the wake op
+    // running under wg-quick's PreUp is what creates the DNS record, so
+    // pre-blocking on DNS would deadlock against the very hook that
+    // would resolve it.
+    if !args.skip_dns_precheck {
+        if let Some(endpoint) = extract_endpoint(&args.config) {
+            wait_for_dns(&endpoint).await;
+        }
+    } else {
+        info!(
+            "skipping DNS precheck — jitWake link defers endpoint resolution to wg-quick PreUp"
+        );
     }
 
     // Phase 3: Bring up the tunnel (tear down first if stale interface exists)
@@ -113,8 +141,11 @@ pub async fn run(args: Args) -> Result<ExitCode> {
                         warn!(interface = %args.interface, "interface down — converging back to connected state");
                         tunnel_down(&args.wg_quick, &args.config).await;
                         // Re-check DNS before retry (infrastructure may have been destroyed/recreated)
-                        if let Some(ref endpoint) = extract_endpoint(&args.config) {
-                            wait_for_dns(endpoint).await;
+                        // JIT links skip this — wake op recreates the record.
+                        if !args.skip_dns_precheck {
+                            if let Some(ref endpoint) = extract_endpoint(&args.config) {
+                                wait_for_dns(endpoint).await;
+                            }
                         }
                         if let Err(e) = tunnel_up(&args.wg_quick, &args.config, &args.key_file).await {
                             error!(error = %e, "tunnel restart failed — will retry next interval");
