@@ -21,6 +21,8 @@ tsunagu = { git = "https://github.com/pleme-io/tsunagu" }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2.0.18"
+# K3s PKI generation (pki-bootstrap subcommand). Pure-Rust; no openssl/step-cli.
+rcgen = { version = "0.13", default-features = false, features = ["pem", "ring"] }
 
 [profile.release]
 codegen-units = 1

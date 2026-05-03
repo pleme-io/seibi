@@ -20,6 +20,7 @@ mod monitor;
 mod nic_tune;
 mod nix_gc;
 mod notify;
+mod pki_bootstrap;
 mod podman_prune;
 mod probe;
 mod reconverge;
@@ -72,6 +73,11 @@ enum Command {
     ClusterSecrets(cluster_secrets::Args),
     /// Deploy a secret file with correct permissions and ownership
     DeploySecret(deploy_secret::Args),
+    /// Bootstrap PKI material (CAs + admin cert) into SOPS for a new
+    /// cluster. K3s subcommand fills the producer-side gap that
+    /// kindling/src/server/bootstrap.rs's PKI consumer expects.
+    /// Predictable kubeconfig across infinite cluster recreations.
+    PkiBootstrap(pki_bootstrap::Args),
     /// Manage SOPS age key (sync from 1Password / clean)
     SopsKey(sops_key::Args),
     /// Edit SOPS-encrypted secrets (auto-provisions age key)
@@ -131,6 +137,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::Monitor(args) => monitor::run(args).await,
         Command::ClusterSecrets(args) => cluster_secrets::run(args).await,
         Command::DeploySecret(args) => deploy_secret::run(&args),
+        Command::PkiBootstrap(args) => pki_bootstrap::run(args).await,
         Command::SopsKey(args) => sops_key::run(args).await,
         Command::SopsEdit(args) => sops_edit::run(args).await,
         Command::AutoUnlock(args) => auto_unlock::run(&args),
