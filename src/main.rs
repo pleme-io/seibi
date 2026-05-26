@@ -3,6 +3,7 @@ use clap::{Parser, Subcommand};
 use std::process::ExitCode;
 
 mod common;
+mod app_sync;
 mod argocd_sync;
 mod attic_push;
 mod auto_unlock;
@@ -46,6 +47,14 @@ struct Cli {
 
 #[derive(Subcommand)]
 enum Command {
+    /// Heal macOS Dock + LaunchServices references for nix-managed `.app`
+    /// bundles after a `nix-collect-garbage` deletes the store path the Dock
+    /// cached. Rewrites dangling Dock entries to the stable
+    /// `~/Applications/Home Manager Apps/<App>.app` symlink, strips the stale
+    /// bookmark, re-registers live bundles, and bounces the Dock. Idempotent;
+    /// run on every home-manager switch. Peer of `spotlight-sync`
+    /// (findability) — this verb owns launchability.
+    AppSync(app_sync::Args),
     /// Trigger manual sync on one or more ArgoCD Applications.
     /// Generic across akeyless ArgoCD work (cluster-generator-fanout
     /// pattern); default `--cluster` targets us-east-1-cicd-eks where
@@ -126,6 +135,7 @@ async fn main() -> ExitCode {
 
 async fn run(cmd: Command) -> Result<ExitCode> {
     match cmd {
+        Command::AppSync(args) => app_sync::run(args).await,
         Command::ArgocdSync(args) => argocd_sync::run(args).await,
         Command::Ddns(args) => ddns::run(args).await,
         Command::Kubeconfig(args) => kubeconfig::run(args).await,
