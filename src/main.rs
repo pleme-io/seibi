@@ -142,7 +142,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::KubeconfigRename(args) => kubeconfig_rename::run(args).await,
         Command::NicTune(args) => nic_tune::run(args).await,
         Command::HelmAuth(args) => helm_auth::run(&args),
-        Command::AtticPush(args) => attic_push::run(&args),
+        Command::AtticPush(args) => attic_push::run(&args).await,
         Command::Notify(args) => notify::run(args).await,
         Command::Monitor(args) => monitor::run(args).await,
         Command::ClusterSecrets(args) => cluster_secrets::run(args).await,

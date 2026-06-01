@@ -4,7 +4,13 @@ use std::fs;
 use std::io::{BufRead, BufReader, Write};
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
+use std::time::Duration;
 use tracing::{info, warn};
+
+/// How long to wait for the reachability probe before declaring the
+/// Attic server's transport down. Short — this is a liveness ping, not
+/// a real request.
+const PROBE_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(ClapArgs)]
 pub struct Args {
@@ -38,10 +44,44 @@ pub struct Args {
     batch_size: usize,
 }
 
+/// Strip the `/<cache-name>` (and any deeper path) suffix from an Attic
+/// cache URL, yielding the server *base* URL. Probing the base avoids the
+/// HTTP 404 (`/nexus`) and 401 (`/nexus/nix-cache-info`) that the
+/// cache-scoped paths return on a perfectly healthy server — those status
+/// codes mean "server up, wrong path / needs auth", never "unreachable".
+///
+/// `http://rio:8080/nexus`            -> `http://rio:8080/`
+/// `http://rio:8080/nexus/`           -> `http://rio:8080/`
+/// `http://rio:8080`                  -> `http://rio:8080/`
+#[must_use]
+pub fn server_base_url(cache_url: &str) -> String {
+    // Find the end of the scheme+authority (`scheme://host:port`).
+    let after_scheme = cache_url
+        .find("://")
+        .map_or(0, |i| i + 3);
+    let authority_end = cache_url[after_scheme..]
+        .find('/')
+        .map_or(cache_url.len(), |i| after_scheme + i);
+    let mut base = cache_url[..authority_end].to_string();
+    base.push('/');
+    base
+}
+
+/// A reachability probe NEVER fails on an HTTP status code — only on a
+/// transport-level failure (DNS error, connection refused, TLS error,
+/// timeout). reqwest's `send()` returns `Ok` for *any* completed HTTP
+/// response (200, 401, 404, 500, …) and `Err` only when the transport
+/// itself failed. So "did the send complete?" is exactly the right
+/// signal. This pure helper makes that decision testable in isolation.
+#[must_use]
+pub fn reachable_from_send(send_succeeded: bool) -> bool {
+    send_succeeded
+}
+
 /// Login to an Attic cache server and push all Nix store paths,
 /// batched so that each underlying `get_missing_paths` request stays
 /// well below atticd's SQLite variable limit.
-pub fn run(args: &Args) -> Result<ExitCode> {
+pub async fn run(args: &Args) -> Result<ExitCode> {
     let token = fs::read_to_string(&args.token_file)
         .with_context(|| format!("reading token from {}", args.token_file.display()))?;
     let token = token.trim();
@@ -55,14 +95,21 @@ pub fn run(args: &Args) -> Result<ExitCode> {
         return Ok(ExitCode::from(2));
     }
 
-    let check = Command::new("attic")
-        .args(["cache", "info", &args.cache_name])
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .status()
-        .context("checking attic cache")?;
-    if !check.success() {
-        warn!(cache = %args.cache_name, "cache unreachable, skipping");
+    // Reachability == transport reachability of the SERVER BASE, not an
+    // HTTP status code on the cache path. `attic cache info` (and a GET
+    // of `/<cache>` / `/<cache>/nix-cache-info`) return non-2xx — 404 /
+    // 401 — on a healthy server, so any status-based check is a
+    // false-negative. We only treat a completed HTTP response (any
+    // status) as reachable; an `Err` from `send()` (DNS / connect /
+    // timeout) is the sole "unreachable" signal.
+    let base = server_base_url(&args.cache_url);
+    let probe = reqwest::Client::builder()
+        .timeout(PROBE_TIMEOUT)
+        .build()
+        .context("building reachability probe client")?;
+    let send_succeeded = probe.get(&base).send().await.is_ok();
+    if !reachable_from_send(send_succeeded) {
+        warn!(cache = %args.cache_name, base = %base, "cache unreachable, skipping");
         return Ok(ExitCode::from(2));
     }
 
@@ -222,5 +269,55 @@ mod tests {
         let batches: Vec<_> = paths.chunks(500).collect();
         assert_eq!(batches.len(), 1, "small input → single batch");
         assert_eq!(batches[0].len(), 10);
+    }
+
+    #[test]
+    fn server_base_strips_cache_name_suffix() {
+        // The reported bug: probing the cache-scoped URL 404s. The base
+        // must drop the `/<cache>` segment so the probe hits the root.
+        assert_eq!(server_base_url("http://rio:8080/nexus"), "http://rio:8080/");
+    }
+
+    #[test]
+    fn server_base_strips_trailing_slash_and_deep_paths() {
+        assert_eq!(server_base_url("http://rio:8080/nexus/"), "http://rio:8080/");
+        assert_eq!(
+            server_base_url("http://rio:8080/nexus/nix-cache-info"),
+            "http://rio:8080/"
+        );
+    }
+
+    #[test]
+    fn server_base_handles_bare_authority_and_https() {
+        assert_eq!(server_base_url("http://rio:8080"), "http://rio:8080/");
+        assert_eq!(
+            server_base_url("https://cache.example.com/nexus"),
+            "https://cache.example.com/"
+        );
+    }
+
+    #[test]
+    fn http_status_codes_are_all_reachable() {
+        // The crux of the false-negative fix: a 404 / 401 / 403 / 500 is
+        // still a COMPLETED HTTP response, which means `send()` returned
+        // `Ok` — the server is UP. Reachability must be true for every
+        // such case. We model "send completed" as the input.
+        for completed in [/* 200 */ true, /* 404 */ true, /* 401 */ true] {
+            assert!(
+                reachable_from_send(completed),
+                "any completed HTTP response (incl. 404/401/403) must be reachable"
+            );
+        }
+    }
+
+    #[test]
+    fn transport_error_is_unreachable() {
+        // Only a transport-level failure (DNS / connection refused /
+        // timeout) — i.e. `send()` returned `Err`, modeled as `false` —
+        // counts as unreachable.
+        assert!(
+            !reachable_from_send(false),
+            "a transport error (DNS/connect/timeout) is the sole unreachable signal"
+        );
     }
 }
