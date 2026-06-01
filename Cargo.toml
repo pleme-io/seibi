@@ -41,6 +41,11 @@ convergence-trait = { git = "https://github.com/pleme-io/convergence-trait" }
 async-trait = "0.1"
 blake3 = "1"
 tokio-util = "0.7"
+# rebuild-efficiency reconcilers: SHA-256 of Cargo.lock — the SAME freshness
+# key gen embeds as `cargo_lock_sha256` (gen-cargo::build_spec::hash_cargo_lock).
+# Both sides compute `format!("{:x}", Sha256::digest(bytes))` so freshness
+# never drifts between gen, substrate's IFD gate, and this guard.
+sha2 = "0.10"
 
 [profile.release]
 codegen-units = 1
