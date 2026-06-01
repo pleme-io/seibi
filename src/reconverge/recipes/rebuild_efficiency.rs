@@ -42,12 +42,14 @@ use sha2::{Digest, Sha256};
 #[serde(default)]
 pub struct RebuildEfficiencyConfig {
     /// The workspace base the rebuild-input repo NAMES are joined against. The
-    /// fleet convention is `$HOME/code/github/<org>/<repo>`; this defaults to
-    /// `$HOME/code/github/pleme-io` (with `$HOME` expanded at `Default`/load
-    /// time via `std::env::var`). Override via the YAML/JSON config to point at
-    /// a non-standard checkout root. The full repo paths are
-    /// `repo_base.join(name)` for each name in `rebuild_input_names`, computed
-    /// by [`Self::rebuild_input_repos`].
+    /// fleet convention is `$HOME/code/github/<org>/<repo>`. Resolved at
+    /// `Default`/load time by [`resolve_repo_base`]: `SEIBI_REPO_BASE` (the
+    /// absolute base the nixos reconverge module sets — load-bearing for the
+    /// root daemon, which has no `$HOME`) wins, else `$HOME/code/github/pleme-io`,
+    /// else a bare relative path. Override via the YAML/JSON config to point at
+    /// a non-standard checkout root (a file value beats the env). The full repo
+    /// paths are `repo_base.join(name)` for each name in `rebuild_input_names`,
+    /// computed by [`Self::rebuild_input_repos`].
     pub repo_base: PathBuf,
 
     /// Bare repo NAMES (joined against `repo_base`) whose committed
@@ -102,11 +104,11 @@ impl Default for RebuildEfficiencyConfig {
     fn default() -> Self {
         // The default rebuild-input set = the repos cid's `nix run .#rebuild`
         // evaluates as Rust flake inputs. Conventionally cloned under
-        // `$HOME/code/github/pleme-io/<repo>` (the fleet workspace convention).
-        // We store the workspace base (`$HOME` expanded at Default-time) + bare
-        // names; the joined paths are computed at use by
-        // `rebuild_input_repos()`. Any name not actually checked out is
-        // loud-skipped, never errored.
+        // `<base>/<repo>` (the fleet workspace convention). We store the
+        // workspace base (resolved at Default-time: SEIBI_REPO_BASE > $HOME-
+        // expanded > bare relative, via `home_code_base`) + bare names; the
+        // joined paths are computed at use by `rebuild_input_repos()`. Any name
+        // not actually checked out is loud-skipped, never errored.
         let base = home_code_base();
         let names = ["nix", "substrate", "tend", "frost", "mado", "fleet", "ayatsuri", "tear", "cordel"]
             .into_iter()
@@ -136,20 +138,33 @@ impl Default for RebuildEfficiencyConfig {
     }
 }
 
-/// `$HOME/code/github/pleme-io` — the conventional pleme-io clone root (the
-/// fleet workspace convention is `$HOME/code/github/<org>/<repo>`). Falls back
-/// to a bare relative path if `$HOME` is unset (tests pass explicit roots, so
-/// this default is only the daemon's convenience).
+/// The rebuild-input workspace base, resolved at `Default`/load time. Reads
+/// `SEIBI_REPO_BASE` (the absolute base the nixos reconverge module sets) first,
+/// then falls back to `$HOME/code/github/pleme-io`, then to a bare relative
+/// path. The root daemon on rio runs as a systemd service with NO `$HOME`, so
+/// `SEIBI_REPO_BASE` is the load-bearing source there; `$HOME` is the operator-
+/// workstation convenience. Tests pass explicit roots via [`resolve_repo_base`].
 #[must_use]
 pub fn home_code_base() -> PathBuf {
-    code_base_from(std::env::var_os("HOME"))
+    resolve_repo_base(std::env::var_os("SEIBI_REPO_BASE"), std::env::var_os("HOME"))
 }
 
-/// Pure `$HOME`-expansion: `Some(h) → h/code/github/pleme-io`; `None → the bare
-/// relative fallback`. Split out so the expansion is unit-tested without
-/// mutating the process environment (no races, no `unsafe set_var`).
+/// Pure repo-base resolution (no env reads — values are passed in, so tests stay
+/// race-free, matching the existing pattern):
+///
+///  a. `SEIBI_REPO_BASE` set + non-empty → use it verbatim as the absolute base.
+///  b. else `$HOME` set → `$HOME/code/github/pleme-io`.
+///  c. else the bare relative fallback `code/github/pleme-io`.
 #[must_use]
-fn code_base_from(home: Option<std::ffi::OsString>) -> PathBuf {
+fn resolve_repo_base(
+    seibi_repo_base: Option<std::ffi::OsString>,
+    home: Option<std::ffi::OsString>,
+) -> PathBuf {
+    if let Some(base) = seibi_repo_base {
+        if !base.is_empty() {
+            return PathBuf::from(base);
+        }
+    }
     home.map_or_else(
         || PathBuf::from("code/github/pleme-io"),
         |h| PathBuf::from(h).join("code/github/pleme-io"),
@@ -349,19 +364,48 @@ mod tests {
     }
 
     #[test]
-    fn code_base_expands_home_when_set() {
-        // $HOME set → repo_base is `<HOME>/code/github/pleme-io` (fleet
-        // workspace convention). Tested via the pure helper so we never mutate
-        // the process env (no parallel-test race, no `unsafe set_var`).
+    fn seibi_repo_base_env_wins_over_home() {
+        // SEIBI_REPO_BASE (absolute base the nixos reconverge module sets) is
+        // used verbatim and takes precedence over $HOME — this is the root-
+        // daemon path (root systemd service has no $HOME). Pure helper so no
+        // process-env mutation (no parallel-test race, no `unsafe set_var`).
         assert_eq!(
-            code_base_from(Some(std::ffi::OsString::from("/home/canary"))),
+            resolve_repo_base(
+                Some(std::ffi::OsString::from("/abs/base")),
+                Some(std::ffi::OsString::from("/home/x"))
+            ),
+            PathBuf::from("/abs/base")
+        );
+    }
+
+    #[test]
+    fn empty_seibi_repo_base_falls_through_to_home() {
+        // An empty SEIBI_REPO_BASE is treated as unset → $HOME path wins.
+        assert_eq!(
+            resolve_repo_base(
+                Some(std::ffi::OsString::new()),
+                Some(std::ffi::OsString::from("/home/x"))
+            ),
+            PathBuf::from("/home/x/code/github/pleme-io")
+        );
+    }
+
+    #[test]
+    fn code_base_expands_home_when_set() {
+        // No SEIBI_REPO_BASE, $HOME set → repo_base is
+        // `<HOME>/code/github/pleme-io` (fleet workspace convention). Tested via
+        // the pure helper so we never mutate the process env (no parallel-test
+        // race, no `unsafe set_var`).
+        assert_eq!(
+            resolve_repo_base(None, Some(std::ffi::OsString::from("/home/canary"))),
             PathBuf::from("/home/canary/code/github/pleme-io")
         );
     }
 
     #[test]
     fn code_base_falls_back_when_home_unset() {
-        assert_eq!(code_base_from(None), PathBuf::from("code/github/pleme-io"));
+        // Neither SEIBI_REPO_BASE nor $HOME → bare relative fallback.
+        assert_eq!(resolve_repo_base(None, None), PathBuf::from("code/github/pleme-io"));
     }
 
     #[test]
