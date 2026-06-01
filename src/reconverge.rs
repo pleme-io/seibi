@@ -35,7 +35,7 @@
 
 use anyhow::Result;
 use clap::Args as ClapArgs;
-use std::process::{Command, ExitCode};
+use std::process::ExitCode;
 use tracing::{error, info, warn};
 
 #[derive(ClapArgs)]
@@ -85,8 +85,12 @@ fn recipes() -> Vec<Recipe> {
             description: "Verify the K8s Secret used by Flux source-controller still authenticates against the upstream git remote; restart fluxcd-bootstrap.service to re-render from current SOPS state on drift.",
             run: flux_git_auth::run,
         },
+        Recipe {
+            name: "containerd-snapshot-heal",
+            description: "Detect the containerd overlayfs-snapshotter↔boltdb desync (meta.db references snapshot fs dirs that no longer exist → CreateContainerError on every new sandbox) and auto-remediate by moving the snapshotter + bolt index aside so containerd rebuilds them and re-pulls images. Cooldown-gated. Recovers the failure that took rio's DNS + GitOps down for 2 days (2026-05-30).",
+            run: containerd_snapshot_heal::run,
+        },
         // Future recipes (each a five-minute add):
-        //   containerd-snapshot-orphans  — `crictl rmi --prune` when image manifests reference missing snapshots
         //   stranded-cni-interfaces      — delete `flannel.1` / `cni0` if k3s started with `--flannel-backend=none`
         //   kubeconfig-rename-idempotent — re-run `seibi kubeconfig-rename` if /etc/rancher/k3s/k3s.yaml drifted back to default names
         //   fluxcd-deploy-key-staleness  — verify Flux's SSH deploy key still authorizes against pleme-io/k8s
@@ -235,6 +239,166 @@ mod flux_git_auth {
             Err(e) => Action::Failed {
                 detail: format!("systemctl restart spawn failed: {e}"),
             },
+        }
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// Recipe: containerd-snapshot-heal
+// ─────────────────────────────────────────────────────────────────────
+//
+// Symptom (rio, 2026-05-30 → 06-01, 2-day outage): containerd's overlayfs
+// snapshotter boltdb (meta.db) references base-layer snapshot IDs whose
+// on-disk `snapshots/<id>/fs` dirs no longer exist — a desync after a
+// reboot (ZFS itself scrubbed clean; the inconsistency is above ZFS, in
+// containerd's metadata-vs-filesystem coupling). Every new sandbox fails
+// `CreateContainerError: failed to stat parent: …/snapshots/<id>/fs: no
+// such file or directory` → CoreDNS, Flux, metrics-server, traefik, the
+// CNPG operator all wedge → cluster DNS + GitOps down.
+//
+// Detection: the exact signature in the recent k3s journal (no boltdb
+// parsing; reflects current reality).
+//
+// Remediation (verified safe — rio is eventually-consistent; ALL cluster
+// state is in kine SQLite on the boot ext4 drive, NOT in the snapshotter):
+// stop k3s → kill shims + unmount /run/k3s overlays (k3s-killall.sh) →
+// gate on 0 shims / 0 overlay mounts → move the overlayfs snapshotter +
+// bolt index aside (recoverable same-dataset rename) → start k3s.
+// containerd rebuilds an empty snapshotter + fresh bolt and re-pulls
+// images. Cooldown-gated (15 min) so a persistent signature can't
+// hot-loop k3s while images re-pull. This is the typed, self-healing form
+// of the one-off recovery runbook — Viggy continuous-convergence applied
+// to node container-runtime health.
+mod containerd_snapshot_heal {
+    use super::Action;
+    use std::process::Command;
+    use std::time::{SystemTime, UNIX_EPOCH};
+
+    const CD: &str = "/var/lib/rancher/k3s/agent/containerd";
+    const MARKER: &str = "/var/lib/seibi/containerd-heal.last";
+    const COOLDOWN_SECS: u64 = 900;
+
+    pub fn run(dry_run: bool) -> Action {
+        if !desync_detected() {
+            return Action::AlreadyConverged;
+        }
+        if let Some(remaining) = cooldown_remaining() {
+            return Action::Refused {
+                detail: format!(
+                    "containerd snapshot desync present but a heal ran {}s ago; waiting {remaining}s for image re-pull to settle",
+                    COOLDOWN_SECS - remaining
+                ),
+            };
+        }
+        if dry_run {
+            return Action::Refused {
+                detail: "containerd overlayfs-snapshotter↔boltdb desync detected (would stop k3s, move snapshotter+meta.db aside, restart, re-pull)".into(),
+            };
+        }
+        heal()
+    }
+
+    /// True iff the recent k3s journal shows the snapshotter parent-missing
+    /// signature (the desync actively breaking container creation).
+    fn desync_detected() -> bool {
+        match Command::new("journalctl")
+            .args(["-u", "k3s", "--since", "-5min", "--no-pager", "-o", "cat"])
+            .output()
+        {
+            Ok(o) => String::from_utf8_lossy(&o.stdout).lines().any(|l| {
+                l.contains("failed to stat parent")
+                    && l.contains("snapshotter.v1.overlayfs/snapshots")
+                    && l.contains("no such file or directory")
+            }),
+            Err(_) => false,
+        }
+    }
+
+    fn now() -> u64 {
+        SystemTime::now().duration_since(UNIX_EPOCH).map_or(0, |d| d.as_secs())
+    }
+
+    fn cooldown_remaining() -> Option<u64> {
+        let last = std::fs::read_to_string(MARKER).ok()?.trim().parse::<u64>().ok()?;
+        let elapsed = now().saturating_sub(last);
+        (elapsed < COOLDOWN_SECS).then(|| COOLDOWN_SECS - elapsed)
+    }
+
+    fn mark_healed() {
+        let _ = std::fs::create_dir_all("/var/lib/seibi");
+        let _ = std::fs::write(MARKER, now().to_string());
+    }
+
+    fn shims_clear() -> bool {
+        Command::new("pgrep")
+            .args(["-fc", "containerd-shim"])
+            .output()
+            .map_or(true, |o| String::from_utf8_lossy(&o.stdout).trim() == "0")
+    }
+
+    fn overlays_clear() -> bool {
+        match Command::new("findmnt").args(["-rno", "TARGET"]).output() {
+            Ok(o) => !String::from_utf8_lossy(&o.stdout)
+                .lines()
+                .any(|l| l.starts_with("/run/k3s/containerd")),
+            Err(_) => true,
+        }
+    }
+
+    fn killall() {
+        for cand in ["/run/current-system/sw/bin/k3s-killall.sh", "k3s-killall.sh"] {
+            if Command::new(cand).status().map(|s| s.success()).unwrap_or(false) {
+                return;
+            }
+        }
+    }
+
+    fn systemctl(action: &str) -> bool {
+        Command::new("systemctl")
+            .args([action, "k3s"])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+
+    fn heal() -> Action {
+        // Mark BEFORE acting so a crash mid-heal still enforces the cooldown.
+        mark_healed();
+        if !systemctl("stop") {
+            return Action::Failed { detail: "failed to stop k3s".into() };
+        }
+        killall();
+        if !shims_clear() || !overlays_clear() {
+            killall(); // one retry
+        }
+        if !shims_clear() || !overlays_clear() {
+            systemctl("start"); // never leave k3s down
+            return Action::Failed {
+                detail: "teardown incomplete (containerd shims / /run/k3s overlay mounts remain); restarted k3s without moving state".into(),
+            };
+        }
+        let ts = now();
+        let moved_snap = std::fs::rename(
+            format!("{CD}/io.containerd.snapshotter.v1.overlayfs"),
+            format!("{CD}/overlayfs.broken.{ts}"),
+        )
+        .is_ok();
+        let moved_bolt = std::fs::rename(
+            format!("{CD}/io.containerd.metadata.v1.bolt"),
+            format!("{CD}/metadata.bolt.broken.{ts}"),
+        )
+        .is_ok();
+        if !systemctl("start") {
+            return Action::Failed {
+                detail: format!(
+                    "moved snapshotter/bolt aside (.broken.{ts}) but k3s failed to start — rollback: mv them back + restart"
+                ),
+            };
+        }
+        Action::Remediated {
+            detail: format!(
+                "containerd snapshotter↔boltdb desync: moved overlayfs(ok={moved_snap}) + meta.db(ok={moved_bolt}) → .broken.{ts}; restarted k3s — images re-pulling, {COOLDOWN_SECS}s cooldown"
+            ),
         }
     }
 }
