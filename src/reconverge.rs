@@ -345,10 +345,47 @@ mod containerd_snapshot_heal {
         }
     }
 
-    fn killall() {
-        for cand in ["/run/current-system/sw/bin/k3s-killall.sh", "k3s-killall.sh"] {
-            if Command::new(cand).status().map(|s| s.success()).unwrap_or(false) {
-                return;
+    /// Run the bundled k3s-killall.sh (kills shims + unmounts /run/k3s).
+    /// NixOS doesn't put it on PATH, so search known spots + the nix store.
+    /// Returns true iff one ran successfully.
+    fn run_killall() -> bool {
+        let mut cands: Vec<String> = vec![
+            "/run/current-system/sw/bin/k3s-killall.sh".into(),
+            "/usr/local/bin/k3s-killall.sh".into(),
+        ];
+        if let Ok(o) = Command::new("sh").args(["-c", "command -v k3s-killall.sh"]).output() {
+            let p = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            if !p.is_empty() {
+                cands.insert(0, p);
+            }
+        }
+        if let Ok(o) = Command::new("find")
+            .args(["/nix/store", "-maxdepth", "3", "-name", "k3s-killall.sh", "-type", "f"])
+            .output()
+        {
+            if let Some(p) = String::from_utf8_lossy(&o.stdout).lines().next() {
+                if !p.is_empty() {
+                    cands.push(p.to_string());
+                }
+            }
+        }
+        cands.iter().any(|c| Command::new(c).status().map(|s| s.success()).unwrap_or(false))
+    }
+
+    /// Fallback when k3s-killall.sh isn't found: the shims reparent to init on
+    /// `stop` and keep the overlay mounts pinned — kill them and lazy-unmount
+    /// every /run/k3s mount (deepest-first).
+    fn manual_teardown() {
+        let _ = Command::new("pkill").args(["-TERM", "-f", "containerd-shim"]).status();
+        std::thread::sleep(std::time::Duration::from_secs(2));
+        let _ = Command::new("pkill").args(["-KILL", "-f", "containerd-shim"]).status();
+        if let Ok(o) = Command::new("findmnt").args(["-rno", "TARGET"]).output() {
+            let s = String::from_utf8_lossy(&o.stdout);
+            let mut targets: Vec<String> =
+                s.lines().filter(|l| l.starts_with("/run/k3s")).map(str::to_string).collect();
+            targets.sort_by_key(|t| std::cmp::Reverse(t.len())); // deepest first
+            for t in &targets {
+                let _ = Command::new("umount").args(["-l", t]).status();
             }
         }
     }
@@ -367,9 +404,11 @@ mod containerd_snapshot_heal {
         if !systemctl("stop") {
             return Action::Failed { detail: "failed to stop k3s".into() };
         }
-        killall();
+        if !run_killall() {
+            manual_teardown();
+        }
         if !shims_clear() || !overlays_clear() {
-            killall(); // one retry
+            manual_teardown(); // retry the teardown
         }
         if !shims_clear() || !overlays_clear() {
             systemctl("start"); // never leave k3s down
