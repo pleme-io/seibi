@@ -51,6 +51,17 @@ pub struct Args {
     /// Emit JSON events instead of human-readable logs.
     #[arg(long)]
     pub json: bool,
+
+    /// Run as a long-lived event+poll daemon (the `Type=notify` service body)
+    /// instead of a single sweep. Internalizes the 1-min poll cadence and
+    /// reacts to k3s journal events in milliseconds. `--dry-run` still
+    /// short-circuits every act to Refused.
+    #[arg(long)]
+    pub daemon: bool,
+
+    /// Path for the shigoto transition audit log (JSONL). Daemon mode only.
+    #[arg(long)]
+    pub audit_log: Option<std::path::PathBuf>,
 }
 
 #[derive(Debug)]
@@ -99,6 +110,12 @@ fn recipes() -> Vec<Recipe> {
 }
 
 pub async fn run(args: Args) -> Result<ExitCode> {
+    // Daemon mode → hand off to the event+poll engine (runs until SIGTERM).
+    if args.daemon {
+        super::daemon(args.dry_run, args.audit_log.clone()).await?;
+        return Ok(ExitCode::SUCCESS);
+    }
+
     let all = recipes();
     let selected: Vec<&Recipe> = match &args.only {
         None => all.iter().collect(),

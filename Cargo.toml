@@ -28,6 +28,20 @@ thiserror = "2.0.18"
 # K3s PKI generation (pki-bootstrap subcommand). Pure-Rust; no openssl/step-cli.
 rcgen = { version = "0.13", default-features = false, features = ["pem", "ring"] }
 
+# reconverge engine — typed event+poll convergence runtime. Sources emit
+# ReconvergeSignals into a coalescing queue dispatched to Reconcilers; each
+# dispatch is a fresh shigoto Dag (the tend re-arm pattern). Consumes the
+# canonical convergence vocabulary; reuses the shigoto scheduler/FSM verbatim.
+shigoto-types = { git = "https://github.com/pleme-io/shigoto" }
+shigoto-scheduler = { git = "https://github.com/pleme-io/shigoto" }
+shigoto-dag = { git = "https://github.com/pleme-io/shigoto" }
+shigoto-retry = { git = "https://github.com/pleme-io/shigoto" }
+shigoto-emit = { git = "https://github.com/pleme-io/shigoto" }
+convergence-trait = { git = "https://github.com/pleme-io/convergence-trait" }
+async-trait = "0.1"
+blake3 = "1"
+tokio-util = "0.7"
+
 [profile.release]
 codegen-units = 1
 lto = true
