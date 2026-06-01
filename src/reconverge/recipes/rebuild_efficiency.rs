@@ -110,7 +110,13 @@ impl Default for RebuildEfficiencyConfig {
         // joined paths are computed at use by `rebuild_input_repos()`. Any name
         // not actually checked out is loud-skipped, never errored.
         let base = home_code_base();
-        let names = ["nix", "substrate", "tend", "frost", "mado", "fleet", "ayatsuri", "tear", "cordel"]
+        // build_spec_freshness ONLY guards repos that should commit a
+        // `Cargo.build-spec.json` — i.e. Rust crates. `nix` + `substrate` are
+        // NIX FLAKES, not Rust crates: they have no Cargo.lock, so the rio
+        // canary saw them report `NoLockfile` (pure noise). They belong only to
+        // the flake_lock_budget recipe below (nix=250 / substrate=80 targets),
+        // which is exactly what that recipe should guard.
+        let names = ["tend", "frost", "mado", "fleet", "ayatsuri", "tear", "cordel"]
             .into_iter()
             .map(str::to_string)
             .collect();
@@ -345,14 +351,15 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_config_has_nine_rebuild_inputs_and_two_budgets() {
+    fn default_config_has_seven_rebuild_inputs_and_two_budgets() {
         let c = RebuildEfficiencyConfig::default();
         assert_eq!(
             c.rebuild_input_names,
-            ["nix", "substrate", "tend", "frost", "mado", "fleet", "ayatsuri", "tear", "cordel"],
-            "nix-led 9-repo rebuild-input set"
+            ["tend", "frost", "mado", "fleet", "ayatsuri", "tear", "cordel"],
+            "Rust-crate-only 7-repo build-spec set (nix + substrate are flakes, \
+             guarded by flake_lock_budgets instead)"
         );
-        assert_eq!(c.rebuild_input_repos().len(), 9, "nine joined repo roots");
+        assert_eq!(c.rebuild_input_repos().len(), 7, "seven joined repo roots");
         assert!(!c.commit, "commit defaults OFF (dry-run)");
         assert_eq!(c.flake_lock_budgets.len(), 2, "nix + substrate locks");
         let nix = &c.flake_lock_budgets[0];
@@ -418,7 +425,7 @@ mod tests {
         let c = RebuildEfficiencyConfig::default();
         assert_eq!(c.repo_base, base, "Default.repo_base == $HOME-expanded base");
         let repos = c.rebuild_input_repos();
-        assert_eq!(repos[0], base.join("nix"), "first repo joins under base");
+        assert_eq!(repos[0], base.join("tend"), "first build-spec repo joins under base");
         assert!(
             repos.iter().all(|p| p.starts_with(&base)),
             "every rebuild-input path resolves under the expanded base"
