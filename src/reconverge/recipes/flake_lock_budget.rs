@@ -102,10 +102,39 @@ impl Reconciler for FlakeLockBudgetGuard {
                 .read(&b.lock_path)
                 .and_then(|bytes| serde_json::from_slice::<serde_json::Value>(&bytes).ok())
                 .and_then(|v| count_nodes(&v));
+            let over = count.and_then(|c| over_budget(c, b));
+            let p = b.lock_path.display();
+
+            // Per-lock observation so the canary sees the measured node count vs
+            // budget. A missing/unparseable lock measures `None` → loud-degrade.
+            match (count, &over) {
+                (Some(n), None) => tracing::info!(
+                    path = %p,
+                    nodes = n,
+                    budget = b.max_nodes,
+                    "flake-lock-budget: {p} = {n} nodes / budget {} [OK]",
+                    b.max_nodes
+                ),
+                (Some(n), Some(reason)) => tracing::warn!(
+                    path = %p,
+                    nodes = n,
+                    budget = b.max_nodes,
+                    reason = %reason,
+                    "flake-lock-budget: {p} = {n} nodes / budget {} [OVER: {reason}]",
+                    b.max_nodes
+                ),
+                (None, _) => tracing::warn!(
+                    path = %p,
+                    budget = b.max_nodes,
+                    "flake-lock-budget: {p} = ?? nodes (missing or unparseable) / budget {} [UNKNOWN]",
+                    b.max_nodes
+                ),
+            }
+
             rows.push(serde_json::json!({
                 "lock": b.lock_path.display().to_string(),
                 "count": count,
-                "over": count.and_then(|c| over_budget(c, b)),
+                "over": over,
             }));
         }
         Ok(serde_json::Value::Array(rows))
@@ -238,7 +267,8 @@ mod tests {
         let env = Arc::new(MockEnv { files });
 
         let cfg = RebuildEfficiencyConfig {
-            rebuild_input_repos: vec![],
+            repo_base: PathBuf::new(),
+            rebuild_input_names: vec![],
             commit: false,
             flake_lock_budgets: vec![budget_at(&lock_path, 2)],
         };

@@ -127,18 +127,30 @@ impl BuildSpecFreshness {
 
     /// Classify every configured repo via the `Env` boundary. Shared by
     /// `observe`; pulled out so the daemon and tests drive the same path.
+    ///
+    /// Loud-degrade: a configured repo whose root isn't checked out on this node
+    /// is logged (`info!` "repo path not present, skipping") and dropped from the
+    /// result — never an error that would fail the whole reconcile. A repo that
+    /// IS present but lacks a Cargo.lock still flows through as `NoLockfile`.
     fn classify_all(&self) -> Vec<RepoState> {
         self.config
-            .rebuild_input_repos
+            .rebuild_input_repos()
             .iter()
-            .map(|repo| {
+            .filter_map(|repo| {
+                if !self.env.path_exists(repo) {
+                    tracing::info!(
+                        repo = %repo.display(),
+                        "build-spec-freshness: repo path not present, skipping"
+                    );
+                    return None;
+                }
                 let spec_path = repo.join(SPEC_FILE);
                 let lock_path = repo.join(LOCK_FILE);
                 let tracked = self.env.git_tracked(repo, Path::new(SPEC_FILE));
                 let spec_bytes = self.env.read(&spec_path);
                 let lock_bytes = self.env.read(&lock_path);
                 let state = classify(tracked, spec_bytes.as_deref(), lock_bytes.as_deref());
-                RepoState { repo: repo.clone(), state }
+                Some(RepoState { repo: repo.clone(), state })
             })
             .collect()
     }
@@ -171,6 +183,39 @@ impl Reconciler for BuildSpecFreshness {
 
     async fn observe(&self, _signal: &ReconvergeSignal) -> Result<Observed, ReconcileError> {
         let states = self.classify_all();
+
+        // Per-repo observation: one line per configured repo with its classified
+        // state, so the canary can see WHAT each repo resolved to (not just THAT
+        // the recipe ran). Matches the containerd/flux_git_auth tracing style.
+        let mut missing = 0usize;
+        let mut stale = 0usize;
+        let mut fresh = 0usize;
+        let mut no_lockfile = 0usize;
+        for rs in &states {
+            let name = rs.repo.display();
+            match rs.state {
+                SpecState::Missing => missing += 1,
+                SpecState::Stale => stale += 1,
+                SpecState::Fresh => fresh += 1,
+                SpecState::NoLockfile => no_lockfile += 1,
+            }
+            tracing::info!(
+                repo = %name,
+                state = ?rs.state,
+                "build-spec-freshness: {name} -> {:?}",
+                rs.state
+            );
+        }
+        tracing::info!(
+            missing,
+            stale,
+            fresh,
+            no_lockfile,
+            total = states.len(),
+            "build-spec-freshness: {missing} missing, {stale} stale, {fresh} fresh, \
+             {no_lockfile} no-lockfile"
+        );
+
         serde_json::to_value(&states)
             .map_err(|e| ReconcileError::new(format!("serialize repo states: {e}")))
     }
@@ -329,8 +374,13 @@ mod tests {
     }
 
     fn cfg_for(repos: Vec<PathBuf>, commit: bool) -> RebuildEfficiencyConfig {
+        // The tests pass absolute repo roots. Stored as names against an empty
+        // `repo_base`: `PathBuf::new().join("/repos/x") == "/repos/x"`, so
+        // `rebuild_input_repos()` yields the exact paths back. The mock Env's
+        // default `path_exists()=true` keeps all of them in the result.
         RebuildEfficiencyConfig {
-            rebuild_input_repos: repos,
+            repo_base: PathBuf::new(),
+            rebuild_input_names: repos.iter().map(|p| p.display().to_string()).collect(),
             commit,
             flake_lock_budgets: vec![],
         }

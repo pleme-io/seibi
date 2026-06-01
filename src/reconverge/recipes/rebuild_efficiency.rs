@@ -41,10 +41,20 @@ use sha2::{Digest, Sha256};
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(default)]
 pub struct RebuildEfficiencyConfig {
-    /// Rust "rebuild-input" repos whose committed `Cargo.build-spec.json`
-    /// keeps the lockfile-builder on the committed fast path. Paths are
-    /// absolute; `~` is NOT expanded (callers pass concrete roots).
-    pub rebuild_input_repos: Vec<PathBuf>,
+    /// The workspace base the rebuild-input repo NAMES are joined against. The
+    /// fleet convention is `$HOME/code/github/<org>/<repo>`; this defaults to
+    /// `$HOME/code/github/pleme-io` (with `$HOME` expanded at `Default`/load
+    /// time via `std::env::var`). Override via the YAML/JSON config to point at
+    /// a non-standard checkout root. The full repo paths are
+    /// `repo_base.join(name)` for each name in `rebuild_input_names`, computed
+    /// by [`Self::rebuild_input_repos`].
+    pub repo_base: PathBuf,
+
+    /// Bare repo NAMES (joined against `repo_base`) whose committed
+    /// `Cargo.build-spec.json` keeps substrate's lockfile-builder on the
+    /// committed fast path. Any name whose joined path isn't checked out is
+    /// loud-skipped (one `info!`), never an error — see `classify_all`.
+    pub rebuild_input_names: Vec<String>,
 
     /// When false (DEFAULT — dry-run): `build_spec_freshness::act` only
     /// REFUSES with a loud log naming the repos it WOULD regen+commit. When
@@ -56,6 +66,16 @@ pub struct RebuildEfficiencyConfig {
     /// enforces. Ceilings are slack-inclusive (nix=250, substrate=80) above
     /// the current committed counts (nix=220, substrate=50).
     pub flake_lock_budgets: Vec<FlakeLockBudget>,
+}
+
+impl RebuildEfficiencyConfig {
+    /// The resolved, absolute rebuild-input repo roots: `repo_base.join(name)`
+    /// for each configured name. Computed at use (the consumer iterates these);
+    /// the bare-name + base split keeps the default self-contained + overridable.
+    #[must_use]
+    pub fn rebuild_input_repos(&self) -> Vec<PathBuf> {
+        self.rebuild_input_names.iter().map(|n| self.repo_base.join(n)).collect()
+    }
 }
 
 /// One committed flake.lock's node-count budget + an optional growth gate.
@@ -82,19 +102,21 @@ impl Default for RebuildEfficiencyConfig {
     fn default() -> Self {
         // The default rebuild-input set = the repos cid's `nix run .#rebuild`
         // evaluates as Rust flake inputs. Conventionally cloned under
-        // `~/code/github/pleme-io/<repo>`; we leave them as repo-name-relative
-        // roots resolved against the workspace base at load time. To keep the
-        // default self-contained + absolute, we anchor on $HOME.
+        // `$HOME/code/github/pleme-io/<repo>` (the fleet workspace convention).
+        // We store the workspace base (`$HOME` expanded at Default-time) + bare
+        // names; the joined paths are computed at use by
+        // `rebuild_input_repos()`. Any name not actually checked out is
+        // loud-skipped, never errored.
         let base = home_code_base();
-        let repos = ["fleet", "tend", "frost", "mado", "ayatsuri", "tear", "cordel"]
+        let names = ["nix", "substrate", "tend", "frost", "mado", "fleet", "ayatsuri", "tear", "cordel"]
             .into_iter()
-            .map(|r| base.join(r))
+            .map(str::to_string)
             .collect();
 
         // Lock budgets: nix repo (220 today → 250 ceiling) + substrate
         // (50 → 80). Anchored on the same code base.
-        let nix_lock = home_code_base().join("nix").join("flake.lock");
-        let substrate_lock = home_code_base().join("substrate").join("flake.lock");
+        let nix_lock = base.join("nix").join("flake.lock");
+        let substrate_lock = base.join("substrate").join("flake.lock");
         let budgets = vec![
             FlakeLockBudget {
                 lock_path: nix_lock,
@@ -110,15 +132,25 @@ impl Default for RebuildEfficiencyConfig {
             },
         ];
 
-        Self { rebuild_input_repos: repos, commit: false, flake_lock_budgets: budgets }
+        Self { repo_base: base, rebuild_input_names: names, commit: false, flake_lock_budgets: budgets }
     }
 }
 
-/// `~/code/github/pleme-io` — the conventional pleme-io clone root. Falls back
+/// `$HOME/code/github/pleme-io` — the conventional pleme-io clone root (the
+/// fleet workspace convention is `$HOME/code/github/<org>/<repo>`). Falls back
 /// to a bare relative path if `$HOME` is unset (tests pass explicit roots, so
 /// this default is only the daemon's convenience).
-fn home_code_base() -> PathBuf {
-    std::env::var_os("HOME").map_or_else(
+#[must_use]
+pub fn home_code_base() -> PathBuf {
+    code_base_from(std::env::var_os("HOME"))
+}
+
+/// Pure `$HOME`-expansion: `Some(h) → h/code/github/pleme-io`; `None → the bare
+/// relative fallback`. Split out so the expansion is unit-tested without
+/// mutating the process environment (no races, no `unsafe set_var`).
+#[must_use]
+fn code_base_from(home: Option<std::ffi::OsString>) -> PathBuf {
+    home.map_or_else(
         || PathBuf::from("code/github/pleme-io"),
         |h| PathBuf::from(h).join("code/github/pleme-io"),
     )
@@ -162,6 +194,15 @@ impl RebuildEfficiencyConfig {
 
 /// Side-effect surface for the rebuild-efficiency recipes.
 pub trait Env: Send + Sync {
+    /// Does `path` exist on this node? Used to loud-skip rebuild-input repos
+    /// that aren't checked out here (graceful degrade, never an error). Defaults
+    /// to `true` so in-memory test mocks treat every configured repo as present
+    /// (their files live in the mock map); `RealEnv` does a real FS check.
+    fn path_exists(&self, path: &Path) -> bool {
+        let _ = path;
+        true
+    }
+
     /// Read a file's bytes (Cargo.lock, flake.lock, the spec). `None` = absent.
     fn read(&self, path: &Path) -> Option<Vec<u8>>;
 
@@ -204,6 +245,10 @@ pub const LOCK_FILE: &str = "Cargo.lock";
 pub struct RealEnv;
 
 impl Env for RealEnv {
+    fn path_exists(&self, path: &Path) -> bool {
+        path.exists()
+    }
+
     fn read(&self, path: &Path) -> Option<Vec<u8>> {
         std::fs::read(path).ok()
     }
@@ -285,9 +330,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn default_config_has_seven_rebuild_inputs_and_two_budgets() {
+    fn default_config_has_nine_rebuild_inputs_and_two_budgets() {
         let c = RebuildEfficiencyConfig::default();
-        assert_eq!(c.rebuild_input_repos.len(), 7, "fleet/tend/frost/mado/ayatsuri/tear/cordel");
+        assert_eq!(
+            c.rebuild_input_names,
+            ["nix", "substrate", "tend", "frost", "mado", "fleet", "ayatsuri", "tear", "cordel"],
+            "nix-led 9-repo rebuild-input set"
+        );
+        assert_eq!(c.rebuild_input_repos().len(), 9, "nine joined repo roots");
         assert!(!c.commit, "commit defaults OFF (dry-run)");
         assert_eq!(c.flake_lock_budgets.len(), 2, "nix + substrate locks");
         let nix = &c.flake_lock_budgets[0];
@@ -296,6 +346,44 @@ mod tests {
         let sub = &c.flake_lock_budgets[1];
         assert_eq!(sub.max_nodes, 80);
         assert_eq!(sub.baseline_nodes, Some(50));
+    }
+
+    #[test]
+    fn code_base_expands_home_when_set() {
+        // $HOME set → repo_base is `<HOME>/code/github/pleme-io` (fleet
+        // workspace convention). Tested via the pure helper so we never mutate
+        // the process env (no parallel-test race, no `unsafe set_var`).
+        assert_eq!(
+            code_base_from(Some(std::ffi::OsString::from("/home/canary"))),
+            PathBuf::from("/home/canary/code/github/pleme-io")
+        );
+    }
+
+    #[test]
+    fn code_base_falls_back_when_home_unset() {
+        assert_eq!(code_base_from(None), PathBuf::from("code/github/pleme-io"));
+    }
+
+    #[test]
+    fn default_repo_base_and_repos_resolve_under_the_expanded_base() {
+        // The Default's repo_base IS the $HOME-expanded base, and every joined
+        // rebuild-input path + the nix budget path live beneath it. Anchors on
+        // the live `home_code_base()` so the assertion holds regardless of the
+        // runner's actual $HOME (no env mutation).
+        let base = home_code_base();
+        let c = RebuildEfficiencyConfig::default();
+        assert_eq!(c.repo_base, base, "Default.repo_base == $HOME-expanded base");
+        let repos = c.rebuild_input_repos();
+        assert_eq!(repos[0], base.join("nix"), "first repo joins under base");
+        assert!(
+            repos.iter().all(|p| p.starts_with(&base)),
+            "every rebuild-input path resolves under the expanded base"
+        );
+        assert_eq!(
+            c.flake_lock_budgets[0].lock_path,
+            base.join("nix").join("flake.lock"),
+            "nix flake.lock budget anchored under the same base"
+        );
     }
 
     #[test]
@@ -324,7 +412,8 @@ mod tests {
         std::fs::create_dir_all(&dir).unwrap();
         let p = dir.join("cfg.json");
         let cfg = RebuildEfficiencyConfig {
-            rebuild_input_repos: vec![PathBuf::from("/tmp/a")],
+            repo_base: PathBuf::from("/srv/checkout"),
+            rebuild_input_names: vec!["a".into(), "b".into()],
             commit: true,
             flake_lock_budgets: vec![FlakeLockBudget {
                 lock_path: PathBuf::from("/tmp/flake.lock"),
@@ -336,6 +425,12 @@ mod tests {
         std::fs::write(&p, serde_json::to_string(&cfg).unwrap()).unwrap();
         let loaded = RebuildEfficiencyConfig::load(&p).unwrap();
         assert_eq!(loaded, cfg);
+        // The override path joins names against the overridden base, not $HOME.
+        assert_eq!(
+            loaded.rebuild_input_repos(),
+            vec![PathBuf::from("/srv/checkout/a"), PathBuf::from("/srv/checkout/b")],
+            "config override still joins names against repo_base"
+        );
         let _ = std::fs::remove_dir_all(&dir);
     }
 }
