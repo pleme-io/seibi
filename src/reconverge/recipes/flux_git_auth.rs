@@ -81,6 +81,26 @@ impl Reconciler for FluxGitAuth {
     }
 }
 
+/// Kubeconfig the apiserver probe authenticates with. Sourced from `$KUBECONFIG`
+/// (kubectl's own contract) so the deploying unit can pin the *reliable* path.
+///
+/// Default `/etc/rancher/k3s/k3s.yaml` points at the k3s supervisor LB on
+/// `127.0.0.1:6443`, which periodically flaps on single-node servers; a flap
+/// there makes this probe read `gitrepo_ready=false` and falsely restart
+/// `fluxcd-bootstrap.service`. The deploying unit (`seibi-reconverge.service`)
+/// sets `KUBECONFIG` to the direct apiserver kubeconfig (`:6444`, localhost-
+/// only, no proxy hop) so a supervisor-LB flap can't trigger false remediation.
+fn kubeconfig_path() -> String {
+    resolve_kubeconfig(std::env::var("KUBECONFIG").ok())
+}
+
+/// Pure resolution of the kubeconfig path from an optional `$KUBECONFIG` value,
+/// split out so it is testable without mutating process-global env.
+fn resolve_kubeconfig(env: Option<String>) -> String {
+    env.filter(|v| !v.is_empty())
+        .unwrap_or_else(|| "/etc/rancher/k3s/k3s.yaml".to_string())
+}
+
 /// Probe reality: is `fluxcd-bootstrap.service` active, and does the
 /// GitRepository report Ready=True? A probe-invocation failure is a transient
 /// `Err` (retry/poll re-observes), not a silent false.
@@ -98,7 +118,7 @@ fn probe() -> Result<Observed, ReconcileError> {
         let gr = Command::new("kubectl")
             .args([
                 "--kubeconfig",
-                "/etc/rancher/k3s/k3s.yaml",
+                &kubeconfig_path(),
                 "get",
                 "gitrepository",
                 "-n",
@@ -130,5 +150,30 @@ fn restart_bootstrap() -> Result<Reconciled, ReconcileError> {
         }),
         Ok(s) => Err(ReconcileError::new(format!("systemctl restart exited {s}"))),
         Err(e) => Err(ReconcileError::new(format!("systemctl restart spawn failed: {e}"))),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::resolve_kubeconfig;
+
+    #[test]
+    fn unset_kubeconfig_falls_back_to_k3s_default() {
+        assert_eq!(resolve_kubeconfig(None), "/etc/rancher/k3s/k3s.yaml");
+    }
+
+    #[test]
+    fn empty_kubeconfig_falls_back_to_k3s_default() {
+        assert_eq!(resolve_kubeconfig(Some(String::new())), "/etc/rancher/k3s/k3s.yaml");
+    }
+
+    #[test]
+    fn set_kubeconfig_pins_the_direct_apiserver_path() {
+        // The deploying unit pins the direct (:6444) kubeconfig so a :6443
+        // supervisor-LB flap can't trigger a false fluxcd-bootstrap restart.
+        assert_eq!(
+            resolve_kubeconfig(Some("/etc/rancher/k3s/k3s-direct.yaml".into())),
+            "/etc/rancher/k3s/k3s-direct.yaml"
+        );
     }
 }
