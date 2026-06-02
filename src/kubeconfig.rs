@@ -55,7 +55,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     Ok(ExitCode::SUCCESS)
 }
 
-async fn wait_for_file(path: &std::path::Path, timeout: Duration) -> Result<()> {
+pub(crate) async fn wait_for_file(path: &std::path::Path, timeout: Duration) -> Result<()> {
     let start = std::time::Instant::now();
     while !path.exists() {
         if start.elapsed() > timeout {
@@ -123,7 +123,7 @@ fn parse_first_inet_ip(text: &str) -> Option<String> {
     })
 }
 
-fn set_perms(path: &std::path::Path, mode: u32) -> Result<()> {
+pub(crate) fn set_perms(path: &std::path::Path, mode: u32) -> Result<()> {
     fs::set_permissions(path, fs::Permissions::from_mode(mode))
         .with_context(|| format!("setting permissions on {}", path.display()))
 }

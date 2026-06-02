@@ -15,6 +15,7 @@ mod direnv_prune;
 mod disk_pressure;
 mod helm_auth;
 mod kubeconfig;
+mod kubeconfig_direct;
 mod kubeconfig_rename;
 mod metrics;
 mod monitor;
@@ -66,6 +67,8 @@ enum Command {
     Ddns(ddns::Args),
     /// Export K3s kubeconfig with detected node IP
     Kubeconfig(kubeconfig::Args),
+    /// Render the direct-apiserver kubeconfig (:6444, no supervisor-LB hop)
+    KubeconfigDirect(kubeconfig_direct::Args),
     /// Rename a kubeconfig context + cluster + user (idempotent, consistent)
     KubeconfigRename(kubeconfig_rename::Args),
     /// Tune a network interface for K8s/container workloads (i40e profile)
@@ -139,6 +142,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::ArgocdSync(args) => argocd_sync::run(args).await,
         Command::Ddns(args) => ddns::run(args).await,
         Command::Kubeconfig(args) => kubeconfig::run(args).await,
+        Command::KubeconfigDirect(args) => kubeconfig_direct::run(args).await,
         Command::KubeconfigRename(args) => kubeconfig_rename::run(args).await,
         Command::NicTune(args) => nic_tune::run(args).await,
         Command::HelmAuth(args) => helm_auth::run(&args),

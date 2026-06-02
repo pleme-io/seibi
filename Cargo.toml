@@ -15,6 +15,11 @@ clap = { version = "4", features = ["derive", "env"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+# Typed kubeconfig transforms (kubeconfig-direct): parse the kubeconfig as
+# structured YAML + mutate the cluster server's port via a typed URL, instead
+# of text-pattern rewrites that silently no-op when k3s changes formatting.
+serde_yaml = "0.9"
+url = "2"
 # app-sync: typed read/write of the binary Dock plist (com.apple.dock) and
 # percent-encoding for _CFURLString file URLs.
 plist = "1"
