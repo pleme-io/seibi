@@ -42,6 +42,23 @@ pub struct Args {
     /// batches are safe there — this flag only matters on SQLite.
     #[arg(long, default_value = "500")]
     batch_size: usize,
+
+    /// Best-effort mode: NEVER exit non-zero. Cache-warming is non-critical —
+    /// an unreachable cache or per-path push failures (e.g. atticd restarting
+    /// during a `nixos-rebuild switch`) must not fail the unit and mark the
+    /// system `degraded`. The real outcome stays in the logs + structured
+    /// `pushed`/`failed` fields for monitoring. Strict mode (default) surfaces
+    /// failures via exit code for callers that gate on the push (CI, etc.).
+    #[arg(long)]
+    best_effort: bool,
+}
+
+/// Resolve the process exit code for a push outcome, honoring best-effort.
+/// In best-effort mode the unit never fails (returns 0); strict mode returns
+/// the outcome's exit code (2 = login/unreachable skip, 1 = partial failure).
+#[must_use]
+pub fn resolve_exit_code(strict_code: u8, best_effort: bool) -> u8 {
+    if best_effort { 0 } else { strict_code }
 }
 
 /// Strip the `/<cache-name>` (and any deeper path) suffix from an Attic
@@ -92,7 +109,7 @@ pub async fn run(args: &Args) -> Result<ExitCode> {
         .context("running attic login")?;
     if !login.success() {
         warn!("attic login failed, skipping");
-        return Ok(ExitCode::from(2));
+        return Ok(ExitCode::from(resolve_exit_code(2, args.best_effort)));
     }
 
     // Reachability == transport reachability of the SERVER BASE, not an
@@ -110,7 +127,7 @@ pub async fn run(args: &Args) -> Result<ExitCode> {
     let send_succeeded = probe.get(&base).send().await.is_ok();
     if !reachable_from_send(send_succeeded) {
         warn!(cache = %args.cache_name, base = %base, "cache unreachable, skipping");
-        return Ok(ExitCode::from(2));
+        return Ok(ExitCode::from(resolve_exit_code(2, args.best_effort)));
     }
 
     let paths = collect_store_paths()?;
@@ -156,11 +173,8 @@ pub async fn run(args: &Args) -> Result<ExitCode> {
         failed = total_err,
         "push complete"
     );
-    if total_err > 0 {
-        Ok(ExitCode::from(1))
-    } else {
-        Ok(ExitCode::SUCCESS)
-    }
+    let strict_code = u8::from(total_err > 0); // 1 on any partial failure, else 0
+    Ok(ExitCode::from(resolve_exit_code(strict_code, args.best_effort)))
 }
 
 /// Run `nix path-info --all` and collect the store paths it prints
@@ -223,6 +237,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn best_effort_never_fails_the_unit() {
+        // Cache-warming must never degrade the system: every strict code
+        // collapses to 0 in best-effort mode.
+        assert_eq!(resolve_exit_code(0, true), 0);
+        assert_eq!(resolve_exit_code(1, true), 0); // partial push failure
+        assert_eq!(resolve_exit_code(2, true), 0); // login fail / unreachable
+    }
+
+    #[test]
+    fn strict_mode_surfaces_failure_codes() {
+        assert_eq!(resolve_exit_code(0, false), 0);
+        assert_eq!(resolve_exit_code(1, false), 1);
+        assert_eq!(resolve_exit_code(2, false), 2);
+    }
+
+    #[test]
     fn batch_size_default_safe_for_sqlite() {
         // The default 500 must leave headroom against the lower
         // SQLite default of SQLITE_MAX_VARIABLE_NUMBER=999. The
@@ -236,6 +266,7 @@ mod tests {
             jobs: 8,
             server_name: String::new(),
             batch_size: 500,
+            best_effort: false,
         };
         assert!(args.batch_size < 999, "default must clear SQLite limit");
     }
