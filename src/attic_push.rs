@@ -1,7 +1,9 @@
 use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
+use std::collections::VecDeque;
 use std::fs;
-use std::io::{BufRead, BufReader, Write};
+use std::io::{BufRead, BufReader, Read, Write};
+use std::net::{TcpStream, ToSocketAddrs};
 use std::path::PathBuf;
 use std::process::{Command, ExitCode, Stdio};
 use std::time::Duration;
@@ -59,6 +61,290 @@ pub struct Args {
 #[must_use]
 pub fn resolve_exit_code(strict_code: u8, best_effort: bool) -> u8 {
     if best_effort { 0 } else { strict_code }
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Breathable push — an AIMD congestion controller for attic-push.
+//
+// atticd exposes NO server-side rate/concurrency/admission knob (every write
+// failure is a bare HTTP 500), and the safe push rate is TIME-VARYING because
+// rio builds on the same node. A fixed-rate bucket can't fit. So the client
+// rides the line: it finds atticd's moving ceiling ONLINE from the per-batch
+// loss signal — additive-increase concurrency while batches succeed, collapse
+// to the floor + exponential backoff + circuit-break the instant atticd errors.
+// Failed paths are RE-ENQUEUED, never dropped, so the cache still warms fully.
+// (theory: Chiu & Jain 1989 AIMD; Nygard circuit-breaker. Sibling of the
+// breathe band law — breathe sets the steady ceiling, this rides under it.)
+// ─────────────────────────────────────────────────────────────────────────
+
+/// A classified `attic push` failure — the typed border (vs an opaque exit-1).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PushError {
+    /// Transport-level: connection refused, tcp-connect, error-sending-request,
+    /// timeout — atticd is saturated or restarting. The AIMD loss signal.
+    TransportDown,
+    /// "too many SQL variables" — the batch is too large for atticd's SQLite.
+    VarLimit,
+    /// 401/403 — auth failed; no amount of backoff fixes it.
+    Auth,
+    /// Anything else (a poison path, an unexpected error).
+    Other,
+}
+
+/// The outcome of one batch push.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum BatchOutcome {
+    Ok,
+    Failed(PushError),
+}
+
+/// What the drive loop should do with the batch it just attempted.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Action {
+    /// Batch landed — proceed.
+    Continue,
+    /// Transient failure — put the paths back; the controller has backed off.
+    Requeue,
+    /// Hard stop (auth) — no point retrying.
+    Abort,
+}
+
+/// Tuning for the AIMD controller. Defaults match the breathable-attic design.
+#[derive(Debug, Clone)]
+pub struct BreathConfig {
+    pub floor: u32,
+    pub ceiling: u32,
+    pub k_clean: u32,
+    pub base_delay: Duration,
+    pub max_delay: Duration,
+    pub break_threshold: u32,
+    pub min_batch: usize,
+    pub open_window: Duration,
+    pub max_circuit_probes: u32,
+}
+
+impl Default for BreathConfig {
+    fn default() -> Self {
+        Self {
+            floor: 1,
+            ceiling: 8,
+            k_clean: 3,
+            base_delay: Duration::from_secs(2),
+            max_delay: Duration::from_secs(60),
+            break_threshold: 3,
+            min_batch: 32,
+            open_window: Duration::from_secs(30),
+            max_circuit_probes: 10,
+        }
+    }
+}
+
+/// The AIMD state. Pure: `observe()` does the whole control law without I/O,
+/// so it is unit-tested exhaustively (mirroring DiskPressureState / the
+/// typed-spec interpreter discipline).
+#[derive(Debug, Clone)]
+pub struct BreathController {
+    jobs: u32,
+    ssthresh: u32,
+    batch_size: usize,
+    consecutive_ok: u32,
+    consecutive_fail: u32,
+    delay: Duration,
+    circuit_open: bool,
+    cfg: BreathConfig,
+}
+
+impl BreathController {
+    #[must_use]
+    pub fn new(start_jobs: u32, ssthresh: u32, batch_size: usize, cfg: BreathConfig) -> Self {
+        Self {
+            jobs: start_jobs.clamp(cfg.floor, cfg.ceiling),
+            ssthresh: ssthresh.max(cfg.floor),
+            batch_size: batch_size.max(cfg.min_batch),
+            consecutive_ok: 0,
+            consecutive_fail: 0,
+            delay: cfg.base_delay,
+            circuit_open: false,
+            cfg,
+        }
+    }
+
+    #[must_use] pub fn jobs(&self) -> u32 { self.jobs }
+    #[must_use] pub fn batch_size(&self) -> usize { self.batch_size }
+    #[must_use] pub fn delay(&self) -> Duration { self.delay }
+    #[must_use] pub fn circuit_open(&self) -> bool { self.circuit_open }
+    #[must_use] pub fn open_window(&self) -> Duration { self.cfg.open_window }
+    #[must_use] pub fn max_circuit_probes(&self) -> u32 { self.cfg.max_circuit_probes }
+
+    /// Circuit recovered (a reachability probe succeeded): resume cautiously.
+    pub fn close_circuit(&mut self) {
+        self.circuit_open = false;
+        self.jobs = self.cfg.floor;
+        self.consecutive_fail = 0;
+        self.delay = self.cfg.base_delay;
+    }
+
+    /// The whole AIMD control law, pure. Returns the loop's next action.
+    pub fn observe(&mut self, outcome: BatchOutcome) -> Action {
+        match outcome {
+            BatchOutcome::Ok => {
+                self.consecutive_fail = 0;
+                self.consecutive_ok += 1;
+                self.delay = self.cfg.base_delay;
+                if self.jobs < self.ssthresh {
+                    // slow-start: exponential up to ssthresh
+                    self.jobs = (self.jobs.saturating_mul(2)).min(self.ssthresh);
+                } else if self.consecutive_ok % self.cfg.k_clean == 0 {
+                    // congestion-avoidance: additive-increase, capped at ceiling
+                    self.jobs = (self.jobs + 1).min(self.cfg.ceiling);
+                }
+                Action::Continue
+            }
+            BatchOutcome::Failed(PushError::Auth) => Action::Abort,
+            BatchOutcome::Failed(PushError::VarLimit) => {
+                // batch too big for atticd's SQLite — halve it and retry smaller
+                self.batch_size = (self.batch_size / 2).max(self.cfg.min_batch);
+                Action::Requeue
+            }
+            BatchOutcome::Failed(PushError::TransportDown | PushError::Other) => {
+                self.consecutive_ok = 0;
+                self.consecutive_fail += 1;
+                self.ssthresh = (self.jobs / 2).max(self.cfg.floor); // remember half the rate
+                self.jobs = self.cfg.floor; // multiplicative-decrease: collapse hard
+                let shift = self.consecutive_fail.min(6);
+                self.delay = self
+                    .cfg
+                    .base_delay
+                    .saturating_mul(1u32 << shift)
+                    .min(self.cfg.max_delay); // exponential inter-batch backoff
+                if self.consecutive_fail >= self.cfg.break_threshold {
+                    self.circuit_open = true; // trip the breaker → pause + probe
+                }
+                Action::Requeue
+            }
+        }
+    }
+}
+
+/// Classify an `attic push` failure from its captured stderr (pure + tested).
+#[must_use]
+pub fn classify_push_error(stderr: &str) -> PushError {
+    let s = stderr.to_ascii_lowercase();
+    if s.contains("connection refused")
+        || s.contains("error sending request")
+        || s.contains("tcp connect")
+        || s.contains("connect error")
+        || s.contains("timed out")
+        || s.contains("timeout")
+    {
+        PushError::TransportDown
+    } else if s.contains("too many sql variables") || s.contains("sqlite_max_variable") {
+        PushError::VarLimit
+    } else if s.contains("401") || s.contains("unauthorized") || s.contains("403") || s.contains("forbidden") {
+        PushError::Auth
+    } else {
+        PushError::Other
+    }
+}
+
+/// Extract `host:port` from a server base URL (`http://rio:8080/` → `rio:8080`).
+#[must_use]
+pub fn parse_authority(base_url: &str) -> Option<String> {
+    base_url
+        .split("://")
+        .nth(1)
+        .and_then(|rest| rest.split('/').next())
+        .filter(|a| !a.is_empty())
+        .map(str::to_string)
+}
+
+/// The Environment the drive loop pushes through — real impl shells out to
+/// `attic`, tests mock it. This is the testability contract.
+pub trait Pusher {
+    fn push_batch(&self, cache_name: &str, jobs: u32, batch: &[String]) -> Result<(), PushError>;
+    fn reachable(&self, base_url: &str) -> bool;
+}
+
+/// The real pusher: `attic push --stdin --jobs N`, stderr captured + classified.
+pub struct AtticPusher;
+
+impl Pusher for AtticPusher {
+    fn push_batch(&self, cache_name: &str, jobs: u32, batch: &[String]) -> Result<(), PushError> {
+        push_batch_classified(cache_name, jobs, batch)
+    }
+    fn reachable(&self, base_url: &str) -> bool {
+        // Transport reachability: can we open a TCP connection to atticd again?
+        let Some(authority) = parse_authority(base_url) else { return false };
+        let Ok(mut addrs) = authority.to_socket_addrs() else { return false };
+        addrs
+            .next()
+            .is_some_and(|addr| TcpStream::connect_timeout(&addr, PROBE_TIMEOUT).is_ok())
+    }
+}
+
+/// Summary of a breathable push run.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct PushSummary {
+    pub pushed: usize,
+    pub unrecovered: usize,
+    pub circuit_tripped: bool,
+    pub aborted: bool,
+}
+
+/// Drive the whole store through the controller: pop a batch, push it, observe
+/// the outcome, ride/back-off accordingly; re-enqueue transient failures; pause
+/// + probe while the breaker is open; give up after `max_circuit_probes`.
+/// Pure control flow over a `Pusher` — testable with a scripted mock.
+pub fn drive_push<P: Pusher>(
+    pusher: &P,
+    cache: &str,
+    base_url: &str,
+    paths: Vec<String>,
+    mut ctl: BreathController,
+    sleep: &dyn Fn(Duration),
+) -> PushSummary {
+    let mut queue: VecDeque<String> = paths.into();
+    let mut pushed = 0usize;
+    let mut circuit_tripped = false;
+    let mut probes = 0u32;
+
+    while !queue.is_empty() {
+        if ctl.circuit_open() {
+            circuit_tripped = true;
+            sleep(ctl.open_window());
+            if pusher.reachable(base_url) {
+                ctl.close_circuit();
+                probes = 0;
+            } else {
+                probes += 1;
+                if probes >= ctl.max_circuit_probes() {
+                    break; // give up; the rest is unrecovered (best-effort)
+                }
+                continue;
+            }
+        }
+
+        let n = ctl.batch_size().min(queue.len());
+        let batch: Vec<String> = queue.drain(..n).collect();
+        let outcome = match pusher.push_batch(cache, ctl.jobs(), &batch) {
+            Ok(()) => BatchOutcome::Ok,
+            Err(e) => BatchOutcome::Failed(e),
+        };
+        match ctl.observe(outcome) {
+            Action::Continue => pushed += batch.len(),
+            Action::Requeue => {
+                for p in batch.into_iter().rev() {
+                    queue.push_front(p);
+                }
+            }
+            Action::Abort => {
+                return PushSummary { pushed, unrecovered: queue.len(), circuit_tripped, aborted: true };
+            }
+        }
+        sleep(ctl.delay());
+    }
+
+    PushSummary { pushed, unrecovered: queue.len(), circuit_tripped, aborted: false }
 }
 
 /// Strip the `/<cache-name>` (and any deeper path) suffix from an Attic
@@ -131,49 +417,45 @@ pub async fn run(args: &Args) -> Result<ExitCode> {
     }
 
     let paths = collect_store_paths()?;
+    // --jobs becomes the CEILING the AIMD ramps toward; the controller starts
+    // small (slow-start) and finds atticd's safe rate online.
+    let cfg = BreathConfig { ceiling: args.jobs.max(1), ..BreathConfig::default() };
+    let ssthresh = (args.jobs / 2).max(cfg.floor);
     info!(
         cache = %args.cache_name,
         total_paths = paths.len(),
         batch_size = args.batch_size,
-        jobs = args.jobs,
-        "pushing store paths in batches..."
+        ceiling = cfg.ceiling,
+        "breathable push: AIMD-riding atticd's moving ceiling..."
     );
 
-    let mut total_ok = 0;
-    let mut total_err = 0;
-    let mut batches = 0;
-    for batch in paths.chunks(args.batch_size.max(1)) {
-        batches += 1;
-        match push_batch(&args.cache_name, args.jobs, batch) {
-            Ok(()) => {
-                total_ok += batch.len();
-                info!(
-                    batch = batches,
-                    paths = batch.len(),
-                    pushed_so_far = total_ok,
-                    "batch ok"
-                );
-            }
-            Err(e) => {
-                total_err += batch.len();
-                warn!(
-                    batch = batches,
-                    paths = batch.len(),
-                    error = %e,
-                    "batch failed; continuing with next batch"
-                );
-            }
-        }
-    }
+    let ctl = BreathController::new(2, ssthresh, args.batch_size, cfg);
+    let cache = args.cache_name.clone();
+    let base_owned = base.clone();
+    // The drive loop is blocking (subprocess + sleeps); keep it off the runtime.
+    let summary = tokio::task::spawn_blocking(move || {
+        drive_push(&AtticPusher, &cache, &base_owned, paths, ctl, &|d| std::thread::sleep(d))
+    })
+    .await
+    .context("breathable push join")?;
 
     info!(
         cache = %args.cache_name,
-        batches,
-        pushed = total_ok,
-        failed = total_err,
+        pushed = summary.pushed,
+        unrecovered = summary.unrecovered,
+        circuit_tripped = summary.circuit_tripped,
         "push complete"
     );
-    let strict_code = u8::from(total_err > 0); // 1 on any partial failure, else 0
+    if summary.circuit_tripped || summary.unrecovered > 0 {
+        // Pillar-11: atticd stayed saturated past the AIMD backoff + breaker.
+        // The cache is partially warmed; the next run retries. Surface for alert.
+        warn!(
+            unrecovered = summary.unrecovered,
+            circuit_tripped = summary.circuit_tripped,
+            "atticd backpressure: paths unrecovered after AIMD backoff"
+        );
+    }
+    let strict_code: u8 = if summary.aborted { 2 } else { u8::from(summary.unrecovered > 0) };
     Ok(ExitCode::from(resolve_exit_code(strict_code, args.best_effort)))
 }
 
@@ -201,35 +483,35 @@ fn collect_store_paths() -> Result<Vec<String>> {
     Ok(paths)
 }
 
-/// One `attic push <cache> --stdin --jobs N` invocation, feeding the
-/// batch's paths to stdin (newline-separated).
-fn push_batch(cache_name: &str, jobs: u32, batch: &[String]) -> Result<()> {
+/// One `attic push <cache> --stdin --jobs N` invocation. stderr is captured so a
+/// failure is CLASSIFIED into a typed `PushError` (the AIMD signal), not an
+/// opaque exit code. stdin is closed explicitly so atticd sees EOF.
+fn push_batch_classified(cache_name: &str, jobs: u32, batch: &[String]) -> Result<(), PushError> {
     let mut child = Command::new("attic")
-        .args([
-            "push",
-            cache_name,
-            "--stdin",
-            "--jobs",
-            &jobs.to_string(),
-        ])
+        .args(["push", cache_name, "--stdin", "--jobs", &jobs.to_string()])
         .stdin(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
-        .context("spawning attic push")?;
+        .map_err(|_| PushError::Other)?;
     if let Some(stdin) = child.stdin.as_mut() {
         for path in batch {
-            stdin
-                .write_all(path.as_bytes())
-                .context("writing path to attic push stdin")?;
-            stdin
-                .write_all(b"\n")
-                .context("writing newline to attic push stdin")?;
+            // a write failure means the child died mid-stream — let wait()
+            // surface the real cause via the captured stderr.
+            if stdin.write_all(path.as_bytes()).is_err() || stdin.write_all(b"\n").is_err() {
+                break;
+            }
         }
     }
-    let status = child.wait().context("waiting on attic push")?;
-    if !status.success() {
-        anyhow::bail!("attic push exited {}", status);
+    drop(child.stdin.take()); // close stdin → EOF so attic finishes reading
+    let mut stderr = String::new();
+    if let Some(mut e) = child.stderr.take() {
+        let _ = e.read_to_string(&mut stderr);
     }
-    Ok(())
+    match child.wait() {
+        Ok(s) if s.success() => Ok(()),
+        Ok(_) => Err(classify_push_error(&stderr)),
+        Err(_) => Err(PushError::Other),
+    }
 }
 
 #[cfg(test)]
@@ -350,5 +632,166 @@ mod tests {
             !reachable_from_send(false),
             "a transport error (DNS/connect/timeout) is the sole unreachable signal"
         );
+    }
+
+    // ── AIMD controller ──────────────────────────────────────────────────
+
+    #[test]
+    fn classify_maps_stderr_to_typed_error() {
+        assert_eq!(classify_push_error("error sending request: Connection refused"), PushError::TransportDown);
+        assert_eq!(classify_push_error("tcp connect error"), PushError::TransportDown);
+        assert_eq!(classify_push_error("operation timed out"), PushError::TransportDown);
+        assert_eq!(classify_push_error("too many SQL variables"), PushError::VarLimit);
+        assert_eq!(classify_push_error("HTTP 401 Unauthorized"), PushError::Auth);
+        assert_eq!(classify_push_error("some other failure"), PushError::Other);
+    }
+
+    #[test]
+    fn parse_authority_extracts_host_port() {
+        assert_eq!(parse_authority("http://rio:8080/"), Some("rio:8080".into()));
+        assert_eq!(parse_authority("http://rio:8080/nexus"), Some("rio:8080".into()));
+        assert_eq!(parse_authority("https://cache.example.com/"), Some("cache.example.com".into()));
+        assert_eq!(parse_authority("not a url"), None);
+    }
+
+    fn ctl() -> BreathController {
+        BreathController::new(2, 4, 500, BreathConfig::default())
+    }
+
+    #[test]
+    fn ok_slow_starts_then_additive_increases() {
+        let mut c = ctl(); // jobs 2, ssthresh 4, ceiling 8
+        assert_eq!(c.observe(BatchOutcome::Ok), Action::Continue);
+        assert_eq!(c.jobs(), 4, "slow-start doubles up to ssthresh");
+        // now jobs == ssthresh → congestion-avoidance: +1 every k_clean(3) oks
+        c.observe(BatchOutcome::Ok); // ok#2
+        assert_eq!(c.jobs(), 4, "no bump before k_clean");
+        c.observe(BatchOutcome::Ok); // ok#3 → 3 % 3 == 0
+        assert_eq!(c.jobs(), 5, "additive-increase after k_clean clean batches");
+    }
+
+    #[test]
+    fn additive_increase_is_capped_at_ceiling() {
+        let mut c = BreathController::new(8, 8, 500, BreathConfig::default()); // start at ceiling
+        for _ in 0..9 { c.observe(BatchOutcome::Ok); }
+        assert_eq!(c.jobs(), 8, "never exceeds ceiling");
+    }
+
+    #[test]
+    fn transport_failure_collapses_and_backs_off() {
+        let mut c = BreathController::new(8, 8, 500, BreathConfig::default());
+        let base = BreathConfig::default().base_delay;
+        assert_eq!(c.observe(BatchOutcome::Failed(PushError::TransportDown)), Action::Requeue);
+        assert_eq!(c.jobs(), 1, "multiplicative-decrease collapses to floor");
+        assert_eq!(c.delay(), base * 2, "exponential backoff: base * 2^1");
+        assert!(!c.circuit_open(), "one failure does not trip the breaker");
+        c.observe(BatchOutcome::Failed(PushError::Other));
+        assert_eq!(c.delay(), base * 4, "backoff grows: base * 2^2");
+        c.observe(BatchOutcome::Failed(PushError::TransportDown)); // 3rd consecutive
+        assert!(c.circuit_open(), "breaker trips at break_threshold (3)");
+    }
+
+    #[test]
+    fn varlimit_halves_batch_and_requeues() {
+        let mut c = ctl();
+        assert_eq!(c.observe(BatchOutcome::Failed(PushError::VarLimit)), Action::Requeue);
+        assert_eq!(c.batch_size(), 250, "batch halves to fit atticd's SQLite");
+    }
+
+    #[test]
+    fn auth_failure_aborts() {
+        let mut c = ctl();
+        assert_eq!(c.observe(BatchOutcome::Failed(PushError::Auth)), Action::Abort);
+    }
+
+    #[test]
+    fn ok_after_backoff_resets_delay_and_clears_failures() {
+        let mut c = BreathController::new(8, 8, 500, BreathConfig::default());
+        c.observe(BatchOutcome::Failed(PushError::TransportDown));
+        c.observe(BatchOutcome::Ok);
+        assert_eq!(c.delay(), BreathConfig::default().base_delay, "a clean batch decays the delay");
+    }
+
+    // ── drive loop (scripted Pusher) ─────────────────────────────────────
+
+    struct MockPusher {
+        outcomes: std::cell::RefCell<VecDeque<Result<(), PushError>>>,
+        reachable_seq: std::cell::RefCell<VecDeque<bool>>,
+        pushed_paths: std::cell::RefCell<usize>,
+    }
+    impl MockPusher {
+        fn new(outcomes: Vec<Result<(), PushError>>, reachable_seq: Vec<bool>) -> Self {
+            Self {
+                outcomes: std::cell::RefCell::new(outcomes.into()),
+                reachable_seq: std::cell::RefCell::new(reachable_seq.into()),
+                pushed_paths: std::cell::RefCell::new(0),
+            }
+        }
+    }
+    impl Pusher for MockPusher {
+        fn push_batch(&self, _c: &str, _j: u32, batch: &[String]) -> Result<(), PushError> {
+            let r = self.outcomes.borrow_mut().pop_front().unwrap_or(Ok(()));
+            if r.is_ok() { *self.pushed_paths.borrow_mut() += batch.len(); }
+            r
+        }
+        fn reachable(&self, _u: &str) -> bool {
+            self.reachable_seq.borrow_mut().pop_front().unwrap_or(true)
+        }
+    }
+
+    fn paths(n: usize) -> Vec<String> {
+        (0..n).map(|i| format!("/nix/store/p-{i}")).collect()
+    }
+    fn no_sleep(_d: Duration) {}
+
+    #[test]
+    fn drive_pushes_everything_when_atticd_is_healthy() {
+        let m = MockPusher::new(vec![], vec![]); // always Ok
+        let c = BreathController::new(2, 4, 100, BreathConfig::default());
+        let s = drive_push(&m, "nexus", "http://x:1/", paths(250), c, &no_sleep);
+        assert_eq!(s.pushed, 250);
+        assert_eq!(s.unrecovered, 0);
+        assert!(!s.circuit_tripped && !s.aborted);
+    }
+
+    #[test]
+    fn drive_recovers_after_atticd_blips() {
+        // first batch fails 3× (trips breaker), atticd then recovers, all land.
+        let m = MockPusher::new(
+            vec![
+                Err(PushError::TransportDown),
+                Err(PushError::TransportDown),
+                Err(PushError::TransportDown),
+            ],
+            vec![true], // first circuit probe succeeds
+        );
+        let c = BreathController::new(4, 4, 100, BreathConfig::default());
+        let s = drive_push(&m, "nexus", "http://x:1/", paths(200), c, &no_sleep);
+        assert!(s.circuit_tripped, "breaker should have tripped");
+        assert_eq!(s.unrecovered, 0, "re-enqueued paths all land after recovery");
+        assert_eq!(s.pushed, 200);
+    }
+
+    #[test]
+    fn drive_gives_up_when_atticd_stays_down() {
+        // every push fails, every probe fails → give up, rest is unrecovered.
+        let m = MockPusher::new(
+            std::iter::repeat_with(|| Err(PushError::TransportDown)).take(50).collect(),
+            vec![false; 50],
+        );
+        let c = BreathController::new(4, 4, 100, BreathConfig::default());
+        let s = drive_push(&m, "nexus", "http://x:1/", paths(300), c, &no_sleep);
+        assert!(s.circuit_tripped);
+        assert!(s.unrecovered > 0, "unrecovered paths surface for best-effort + alert");
+        assert!(!s.aborted);
+    }
+
+    #[test]
+    fn drive_aborts_on_auth() {
+        let m = MockPusher::new(vec![Err(PushError::Auth)], vec![]);
+        let c = BreathController::new(4, 4, 100, BreathConfig::default());
+        let s = drive_push(&m, "nexus", "http://x:1/", paths(200), c, &no_sleep);
+        assert!(s.aborted);
+        assert_eq!(s.pushed, 0);
     }
 }
