@@ -249,7 +249,7 @@ checksum = "3d52eff69cd5e647efe296129160853a42795992097e8af39800e1060caeea9b"
 [[package]]
 name = "convergence-trait"
 version = "0.1.0"
-source = "git+https://github.com/pleme-io/convergence-trait#01f2daeb125a9012589b3997d68ea3fd1a9dead4"
+source = "git+https://github.com/pleme-io/convergence-trait#d9f50bb653c220f2029dabf778846b3beb2708b3"
 dependencies = [
  "serde",
  "serde_json",
@@ -425,8 +425,8 @@ dependencies = [
 
 [[package]]
 name = "gen-macros"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/gen#4fcb381a6b51f9e32d36fc0dae9a07657117cccd"
+version = "0.1.9"
+source = "git+https://github.com/pleme-io/gen#6d82c9d3885c781e923ec46330d05d7eca469a3b"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -435,8 +435,8 @@ dependencies = [
 
 [[package]]
 name = "gen-platform"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/gen#4fcb381a6b51f9e32d36fc0dae9a07657117cccd"
+version = "0.1.9"
+source = "git+https://github.com/pleme-io/gen#6d82c9d3885c781e923ec46330d05d7eca469a3b"
 dependencies = [
  "gen-macros",
  "gen-types",
@@ -448,8 +448,8 @@ dependencies = [
 
 [[package]]
 name = "gen-types"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/gen#4fcb381a6b51f9e32d36fc0dae9a07657117cccd"
+version = "0.1.9"
+source = "git+https://github.com/pleme-io/gen#6d82c9d3885c781e923ec46330d05d7eca469a3b"
 dependencies = [
  "blake3",
  "chrono",
@@ -1410,8 +1410,8 @@ dependencies = [
 
 [[package]]
 name = "shigoto-budget"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shigoto#0a30877d119a14e2238bbb254d882e10a0c83cf1"
+version = "0.1.5"
+source = "git+https://github.com/pleme-io/shigoto#fb75042456a2ac00a37c6f0f7312ca1128b96b23"
 dependencies = [
  "serde",
  "shigoto-types",
@@ -1420,8 +1420,8 @@ dependencies = [
 
 [[package]]
 name = "shigoto-dag"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shigoto#0a30877d119a14e2238bbb254d882e10a0c83cf1"
+version = "0.1.5"
+source = "git+https://github.com/pleme-io/shigoto#fb75042456a2ac00a37c6f0f7312ca1128b96b23"
 dependencies = [
  "petgraph",
  "serde",
@@ -1431,8 +1431,8 @@ dependencies = [
 
 [[package]]
 name = "shigoto-emit"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shigoto#0a30877d119a14e2238bbb254d882e10a0c83cf1"
+version = "0.1.5"
+source = "git+https://github.com/pleme-io/shigoto#fb75042456a2ac00a37c6f0f7312ca1128b96b23"
 dependencies = [
  "async-trait",
  "serde",
@@ -1443,8 +1443,8 @@ dependencies = [
 
 [[package]]
 name = "shigoto-gate"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shigoto#0a30877d119a14e2238bbb254d882e10a0c83cf1"
+version = "0.1.5"
+source = "git+https://github.com/pleme-io/shigoto#fb75042456a2ac00a37c6f0f7312ca1128b96b23"
 dependencies = [
  "shigoto-dag",
  "shigoto-types",
@@ -1452,8 +1452,8 @@ dependencies = [
 
 [[package]]
 name = "shigoto-retry"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shigoto#0a30877d119a14e2238bbb254d882e10a0c83cf1"
+version = "0.1.5"
+source = "git+https://github.com/pleme-io/shigoto#fb75042456a2ac00a37c6f0f7312ca1128b96b23"
 dependencies = [
  "serde",
  "shigoto-types",
@@ -1461,8 +1461,8 @@ dependencies = [
 
 [[package]]
 name = "shigoto-scheduler"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shigoto#0a30877d119a14e2238bbb254d882e10a0c83cf1"
+version = "0.1.5"
+source = "git+https://github.com/pleme-io/shigoto#fb75042456a2ac00a37c6f0f7312ca1128b96b23"
 dependencies = [
  "anyhow",
  "async-trait",
@@ -1480,8 +1480,8 @@ dependencies = [
 
 [[package]]
 name = "shigoto-types"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/shigoto#0a30877d119a14e2238bbb254d882e10a0c83cf1"
+version = "0.1.5"
+source = "git+https://github.com/pleme-io/shigoto#fb75042456a2ac00a37c6f0f7312ca1128b96b23"
 dependencies = [
  "async-trait",
  "chrono",
@@ -1842,8 +1842,8 @@ checksum = "e421abadd41a4225275504ea4d6566923418b7f05506fbc9c0fe86ba7396114b"
 
 [[package]]
 name = "tsunagu"
-version = "0.1.0"
-source = "git+https://github.com/pleme-io/tsunagu#6986dcfb7b78d199cca8cb91dbd44dd7edab9dda"
+version = "0.1.1"
+source = "git+https://github.com/pleme-io/tsunagu#64c06a1ff895409209d626db3469181bb24f9afd"
 dependencies = [
  "dirs",
  "serde",
