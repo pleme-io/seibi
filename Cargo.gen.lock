@@ -7690,11 +7690,11 @@
     "convergence-trait-0.1.0": {
       "edition": "2024"
     },
-    "core-foundation-sys-0.8.7": {
-      "edition": "2018"
-    },
     "cpufeatures-0.2.17": {
       "edition": "2018"
+    },
+    "cpufeatures-0.3.0": {
+      "edition": "2024"
     },
     "crypto-common-0.1.7": {
       "edition": "2018"
@@ -8254,8 +8254,8 @@
       "edition": "2021",
       "build_script": "build.rs"
     },
-    "cpufeatures-0.3.0": {
-      "edition": "2024"
+    "core-foundation-sys-0.8.7": {
+      "edition": "2018"
     }
   },
   "git_nar_sha256": {
