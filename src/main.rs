@@ -30,6 +30,7 @@ mod rust_cleanup;
 mod sops_edit;
 mod sops_key;
 mod spotlight_sync;
+mod ssm_bootstrap;
 mod sweep;
 mod watch;
 mod webhook;
@@ -83,6 +84,9 @@ enum Command {
     Monitor(monitor::Args),
     /// Extract cluster bootstrap secrets from SOPS (outputs eval-able exports)
     ClusterSecrets(cluster_secrets::Args),
+    /// Seed a cluster's bootstrap secrets from SOPS into AWS SSM SecureString
+    /// (the W3b secret-free boot path; run once on the host with the age key)
+    SsmBootstrap(ssm_bootstrap::Args),
     /// Deploy a secret file with correct permissions and ownership
     DeploySecret(deploy_secret::Args),
     /// Bootstrap PKI material (CAs + admin cert) into SOPS for a new
@@ -150,6 +154,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::Notify(args) => notify::run(args).await,
         Command::Monitor(args) => monitor::run(args).await,
         Command::ClusterSecrets(args) => cluster_secrets::run(args).await,
+        Command::SsmBootstrap(args) => ssm_bootstrap::run(args).await,
         Command::DeploySecret(args) => deploy_secret::run(&args),
         Command::PkiBootstrap(args) => pki_bootstrap::run(args).await,
         Command::SopsKey(args) => sops_key::run(args).await,
