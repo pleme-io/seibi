@@ -32,6 +32,11 @@ tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 thiserror = "2.0.18"
 # K3s PKI generation (pki-bootstrap subcommand). Pure-Rust; no openssl/step-cli.
 rcgen = { version = "0.13", default-features = false, features = ["pem", "ring"] }
+# ssm-bootstrap: typed in-process SSM SecureString writes (no aws CLI shell-out
+# — the secret value never leaves the process). seibi is an operator tool, not
+# the node binary, so it's free of kindling's aws-sdk build-size concern.
+aws-config = { version = "1.5", features = ["behavior-version-latest", "sso"] }
+aws-sdk-ssm = "1"
 
 # reconverge engine — typed event+poll convergence runtime. Sources emit
 # ReconvergeSignals into a coalescing queue dispatched to Reconcilers; each

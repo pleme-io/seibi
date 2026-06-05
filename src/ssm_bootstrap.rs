@@ -11,7 +11,6 @@
 
 use anyhow::{Context, Result};
 use clap::Args as ClapArgs;
-use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use tracing::{info, warn};
@@ -158,44 +157,30 @@ fn extract_sops(secrets_file: &Path, age_key_file: &Path, paths: &[&str], cluste
     None
 }
 
-/// Write one SecureString to SSM via the `aws` CLI. The value is passed on
-/// stdin (`--cli-input-json file:///dev/stdin`), never argv, so it does not
-/// appear in the process table.
-fn put_ssm_parameter(region: &str, name: &str, value: &str, dry_run: bool) -> Result<()> {
+/// Write one SecureString to SSM via the typed aws-sdk-ssm client. The value
+/// is passed in-process — never argv, a temp file, or a CLI — and the SDK
+/// serializes the request. This is the de-shelled path (one client, no
+/// per-call CLI cold-start), so 13 puts complete in well under a second.
+async fn put_ssm_parameter(
+    client: &aws_sdk_ssm::Client,
+    name: &str,
+    value: &str,
+    dry_run: bool,
+) -> Result<()> {
     if dry_run {
         info!(param = %name, bytes = value.len(), "DRY-RUN: would put SecureString");
         return Ok(());
     }
 
-    let input = serde_json::json!({
-        "Name": name,
-        "Value": value,
-        "Type": "SecureString",
-        "Overwrite": true,
-    });
-
-    let mut child = std::process::Command::new("aws")
-        .args(["ssm", "put-parameter", "--region", region, "--cli-input-json", "file:///dev/stdin"])
-        .stdin(std::process::Stdio::piped())
-        .stdout(std::process::Stdio::piped())
-        .stderr(std::process::Stdio::piped())
-        .spawn()
-        .context("spawning `aws ssm put-parameter`")?;
-
-    child
-        .stdin
-        .take()
-        .context("capturing aws stdin")?
-        .write_all(serde_json::to_string(&input)?.as_bytes())
-        .context("writing put-parameter input")?;
-
-    let out = child.wait_with_output().context("awaiting `aws ssm put-parameter`")?;
-    if !out.status.success() {
-        anyhow::bail!(
-            "aws ssm put-parameter for {name} failed: {}",
-            String::from_utf8_lossy(&out.stderr).trim()
-        );
-    }
+    client
+        .put_parameter()
+        .name(name)
+        .value(value)
+        .r#type(aws_sdk_ssm::types::ParameterType::SecureString)
+        .overwrite(true)
+        .send()
+        .await
+        .with_context(|| format!("aws ssm put-parameter {name}"))?;
     Ok(())
 }
 
@@ -230,6 +215,14 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         "seeding bootstrap secrets to SSM SecureString"
     );
 
+    // One typed client for the whole run (credentials resolved from the
+    // ambient chain — AWS_PROFILE / SSO / env — the same as the aws CLI).
+    let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(aws_sdk_ssm::config::Region::new(args.region.clone()))
+        .load()
+        .await;
+    let client = aws_sdk_ssm::Client::new(&sdk_config);
+
     let mut written = 0usize;
     let mut missing: Vec<String> = Vec::new();
 
@@ -240,7 +233,8 @@ pub async fn run(args: Args) -> Result<ExitCode> {
                 if !def.suffix.is_empty() {
                     value.push_str(def.suffix);
                 }
-                put_ssm_parameter(&args.region, &name, &value, args.dry_run)
+                put_ssm_parameter(&client, &name, &value, args.dry_run)
+                    .await
                     .with_context(|| format!("seeding {name}"))?;
                 info!(param = %name, "seeded");
                 written += 1;
