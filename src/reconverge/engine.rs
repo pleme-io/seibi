@@ -289,10 +289,10 @@ impl Engine {
                 Ok(e) => Arc::new(e),
                 Err(err) => {
                     tracing::warn!(error = %err, path = %p.display(), "audit emitter open failed; using null");
-                    Arc::new(NullEmitter)
+                    Arc::new(NullEmitter::new())
                 }
             },
-            None => Arc::new(NullEmitter),
+            None => Arc::new(NullEmitter::new()),
         }
     }
 }
