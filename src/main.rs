@@ -7,6 +7,7 @@ mod app_sync;
 mod argocd_sync;
 mod attic_push;
 mod auto_unlock;
+mod backup;
 mod blocklist;
 mod claude_vm_prune;
 mod cluster_secrets;
@@ -29,6 +30,7 @@ mod podman_prune;
 mod probe;
 mod reconverge;
 mod rust_cleanup;
+mod self_signed_cert;
 mod sops_edit;
 mod sops_key;
 mod spotlight_sync;
@@ -84,6 +86,12 @@ enum Command {
     /// (fetch best-effort, keep 0.0.0.0/127.0.0.1 lines, sort+dedup). Replaces
     /// the inline shell in pleme-io/nix's edge-router.nix.
     Blocklist(blocklist::Args),
+    /// Generate a self-signed TLS cert (idempotent, rcgen — no openssl).
+    /// Replaces the vault-cert shell in pleme-io/nix's vaultwarden module.
+    SelfSignedCert(self_signed_cert::Args),
+    /// Timestamped tar.gz backup of a directory with retention + optional
+    /// stop/start of a systemd unit. Replaces the vaultwarden-backup shell.
+    Backup(backup::Args),
     /// Generate Helm OCI registry auth config
     HelmAuth(helm_auth::Args),
     /// Push Nix store paths to Attic binary cache
@@ -161,6 +169,8 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::NicTune(args) => nic_tune::run(args).await,
         Command::DiskFacts(args) => disk_facts::run(&args),
         Command::Blocklist(args) => blocklist::run(&args).await,
+        Command::SelfSignedCert(args) => self_signed_cert::run(&args),
+        Command::Backup(args) => backup::run(&args).await,
         Command::HelmAuth(args) => helm_auth::run(&args),
         Command::AtticPush(args) => attic_push::run(&args).await,
         Command::Notify(args) => notify::run(args).await,
