@@ -12,6 +12,7 @@ mod cluster_secrets;
 mod ddns;
 mod deploy_secret;
 mod direnv_prune;
+mod disk_facts;
 mod disk_pressure;
 mod helm_auth;
 mod kubeconfig;
@@ -74,6 +75,10 @@ enum Command {
     KubeconfigRename(kubeconfig_rename::Args),
     /// Tune a network interface for K8s/container workloads (i40e profile)
     NicTune(nic_tune::Args),
+    /// Write /dev/disk/by-id/ facts as a Nix-importable file for disko
+    /// (nvme/ata/scsi/wwn whole-disk discovery). Replaces the shell
+    /// placeholder in pleme-io/nix's disk-facts.nix.
+    DiskFacts(disk_facts::Args),
     /// Generate Helm OCI registry auth config
     HelmAuth(helm_auth::Args),
     /// Push Nix store paths to Attic binary cache
@@ -149,6 +154,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::KubeconfigDirect(args) => kubeconfig_direct::run(args).await,
         Command::KubeconfigRename(args) => kubeconfig_rename::run(args).await,
         Command::NicTune(args) => nic_tune::run(args).await,
+        Command::DiskFacts(args) => disk_facts::run(&args),
         Command::HelmAuth(args) => helm_auth::run(&args),
         Command::AtticPush(args) => attic_push::run(&args).await,
         Command::Notify(args) => notify::run(args).await,
