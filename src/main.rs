@@ -7,6 +7,7 @@ mod app_sync;
 mod argocd_sync;
 mod attic_push;
 mod auto_unlock;
+mod blocklist;
 mod claude_vm_prune;
 mod cluster_secrets;
 mod ddns;
@@ -79,6 +80,10 @@ enum Command {
     /// (nvme/ata/scsi/wwn whole-disk discovery). Replaces the shell
     /// placeholder in pleme-io/nix's disk-facts.nix.
     DiskFacts(disk_facts::Args),
+    /// Assemble a dnsmasq ad/tracker blocklist from upstream hosts lists
+    /// (fetch best-effort, keep 0.0.0.0/127.0.0.1 lines, sort+dedup). Replaces
+    /// the inline shell in pleme-io/nix's edge-router.nix.
+    Blocklist(blocklist::Args),
     /// Generate Helm OCI registry auth config
     HelmAuth(helm_auth::Args),
     /// Push Nix store paths to Attic binary cache
@@ -155,6 +160,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::KubeconfigRename(args) => kubeconfig_rename::run(args).await,
         Command::NicTune(args) => nic_tune::run(args).await,
         Command::DiskFacts(args) => disk_facts::run(&args),
+        Command::Blocklist(args) => blocklist::run(&args).await,
         Command::HelmAuth(args) => helm_auth::run(&args),
         Command::AtticPush(args) => attic_push::run(&args).await,
         Command::Notify(args) => notify::run(args).await,
