@@ -111,9 +111,13 @@ pub async fn run(args: &Args) -> Result<ExitCode> {
 
     let out = args.dest.join(format!("{}-{}.tar.gz", args.prefix, timestamp()));
 
-    // Stop the unit for a consistent snapshot, if requested.
+    // Stop the unit for a consistent snapshot, if requested. Best-effort: a
+    // stop failure (e.g. insufficient privilege) backs up live data rather than
+    // skipping the backup — matching the original shell's no-`set -e` behaviour.
     if let Some(unit) = &args.stop_unit {
-        systemctl("stop", unit).with_context(|| format!("stopping {unit}"))?;
+        if let Err(e) = systemctl("stop", unit) {
+            warn!(unit, error = %e, "failed to stop unit before backup — backing up live data");
+        }
     }
 
     // Archive + prune; capture the result so we ALWAYS restart the unit.
