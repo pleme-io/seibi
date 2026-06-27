@@ -127,6 +127,14 @@ pub struct Args {
     /// Print what would be written without calling AWS.
     #[arg(long)]
     dry_run: bool,
+
+    /// After seeding, read each SecureString back and assert it matches the
+    /// SOPS source — the drift gate that turns "re-run safe" into "provably
+    /// identical state": same SOPS → same SSM → same cluster identity across
+    /// every up/down. Combine with --dry-run for a pure read-back drift check
+    /// (no writes).
+    #[arg(long)]
+    verify: bool,
 }
 
 fn default_key_file() -> PathBuf {
@@ -157,6 +165,18 @@ fn extract_sops(secrets_file: &Path, age_key_file: &Path, paths: &[&str], cluste
     None
 }
 
+/// The exact value a secret must hold in SSM = the SOPS source plus any def
+/// suffix (only the k3s admin-password carries one). Used by BOTH the seed
+/// and the verify pass so they can never compute a different "intended" value
+/// — the determinism contract lives in one function.
+fn intended_value(raw: String, def: &SsmSecretDef) -> String {
+    let mut value = raw;
+    if !def.suffix.is_empty() {
+        value.push_str(def.suffix);
+    }
+    value
+}
+
 /// Write one SecureString to SSM via the typed aws-sdk-ssm client. The value
 /// is passed in-process — never argv, a temp file, or a CLI — and the SDK
 /// serializes the request. This is the de-shelled path (one client, no
@@ -182,6 +202,28 @@ async fn put_ssm_parameter(
         .await
         .with_context(|| format!("aws ssm put-parameter {name}"))?;
     Ok(())
+}
+
+/// Read one SecureString back (decrypted) and compare to the intended value.
+/// `Ok(true)` = SSM matches SOPS; `Ok(false)` = drift; `Err` = missing/unreadable.
+/// This is the determinism gate: the seeded SSM projection must equal its SOPS
+/// source, so a node boot reproduces exactly the intended cluster identity.
+async fn verify_ssm_parameter(
+    client: &aws_sdk_ssm::Client,
+    name: &str,
+    expected: &str,
+) -> Result<bool> {
+    let got = client
+        .get_parameter()
+        .name(name)
+        .with_decryption(true)
+        .send()
+        .await
+        .with_context(|| format!("aws ssm get-parameter {name}"))?
+        .parameter
+        .and_then(|p| p.value)
+        .with_context(|| format!("SSM parameter {name} has no value"))?;
+    Ok(got == expected)
 }
 
 pub async fn run(args: Args) -> Result<ExitCode> {
@@ -229,10 +271,8 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     for def in SECRET_DEFS {
         let name = format!("{}/{}", prefix, def.ssm_suffix);
         match extract_sops(&secrets_file, &age_key_file, def.sops_paths, &args.cluster) {
-            Some(mut value) => {
-                if !def.suffix.is_empty() {
-                    value.push_str(def.suffix);
-                }
+            Some(raw) => {
+                let value = intended_value(raw, def);
                 put_ssm_parameter(&client, &name, &value, args.dry_run)
                     .await
                     .with_context(|| format!("seeding {name}"))?;
@@ -257,6 +297,45 @@ pub async fn run(args: Args) -> Result<ExitCode> {
             missing.len(),
             args.cluster,
             missing.join(", ")
+        );
+    }
+
+    // ── Drift gate (--verify): read each SecureString back and assert it
+    // matches the SOPS source. Turns idempotency from "re-run without error"
+    // into "provably identical state" — the guarantee that cluster ups/downs
+    // reproduce the SAME identity. With --dry-run (writes skipped) this is a
+    // pure read-back drift check against whatever is already seeded.
+    if args.verify {
+        info!(cluster = %args.cluster, "verifying SSM SecureStrings match SOPS (drift gate)");
+        let mut drift: Vec<String> = Vec::new();
+        for def in SECRET_DEFS {
+            let name = format!("{}/{}", prefix, def.ssm_suffix);
+            let Some(raw) = extract_sops(&secrets_file, &age_key_file, def.sops_paths, &args.cluster)
+            else {
+                drift.push(format!("{} (absent from SOPS)", def.ssm_suffix));
+                continue;
+            };
+            let expected = intended_value(raw, def);
+            match verify_ssm_parameter(&client, &name, &expected).await {
+                Ok(true) => info!(param = %name, "verified == SOPS"),
+                Ok(false) => drift.push(format!("{} (SSM != SOPS)", def.ssm_suffix)),
+                Err(e) => drift.push(format!("{} ({e})", def.ssm_suffix)),
+            }
+        }
+        if !drift.is_empty() {
+            anyhow::bail!(
+                "{} secret(s) DRIFTED for cluster {}: {}. SSM does not match SOPS — \
+                 re-seed (drop --dry-run) to converge; otherwise the node boots a \
+                 DIFFERENT identity than SOPS intends.",
+                drift.len(),
+                args.cluster,
+                drift.join(", ")
+            );
+        }
+        info!(
+            cluster = %args.cluster,
+            verified = SECRET_DEFS.len(),
+            "all secrets match SOPS — deterministic, no drift"
         );
     }
 
@@ -292,6 +371,26 @@ mod tests {
     fn cluster_substitution_in_sops_paths() {
         let p = r#"["ryn"]["wireguard"]["ryn-{cluster}"]["psk"]"#.replace("{cluster}", "akeyless-dev");
         assert_eq!(p, r#"["ryn"]["wireguard"]["ryn-akeyless-dev"]["psk"]"#);
+    }
+
+    #[test]
+    fn intended_value_applies_suffix_consistently() {
+        // The admin-password def carries the k3s static-token suffix; the seed
+        // and verify passes both compute the intended value through this one
+        // function, so the drift gate can never false-positive on the suffix.
+        let admin = SECRET_DEFS
+            .iter()
+            .find(|d| d.ssm_suffix == "k3s-admin-password")
+            .unwrap();
+        assert_eq!(
+            intended_value("hunter2".to_string(), admin),
+            "hunter2,admin,admin,system:masters"
+        );
+        let age = SECRET_DEFS
+            .iter()
+            .find(|d| d.ssm_suffix == "sops-age-key")
+            .unwrap();
+        assert_eq!(intended_value("AGE-KEY".to_string(), age), "AGE-KEY");
     }
 
     #[test]
