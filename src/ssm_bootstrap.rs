@@ -204,26 +204,148 @@ async fn put_ssm_parameter(
     Ok(())
 }
 
-/// Read one SecureString back (decrypted) and compare to the intended value.
-/// `Ok(true)` = SSM matches SOPS; `Ok(false)` = drift; `Err` = missing/unreadable.
-/// This is the determinism gate: the seeded SSM projection must equal its SOPS
-/// source, so a node boot reproduces exactly the intended cluster identity.
-async fn verify_ssm_parameter(
-    client: &aws_sdk_ssm::Client,
-    name: &str,
-    expected: &str,
-) -> Result<bool> {
-    let got = client
+/// Resolved configuration for one cluster's bootstrap-secret projection.
+/// The reusable seed/verify core takes this so both the CLI (`run`) and the
+/// `seibi bootstrap` orchestrator drive ONE implementation — no duplicated
+/// SOPS→SSM logic, no chance of the two paths diverging.
+pub struct SsmConfig {
+    pub cluster: String,
+    pub prefix: String,
+    pub region: String,
+    pub secrets_file: PathBuf,
+    pub age_key_file: PathBuf,
+}
+
+/// Outcome of one `seed` pass. `written` = parameters absent-or-differing from
+/// SOPS that were (re)written; `unchanged` = already byte-identical (the
+/// idempotent no-op path); `missing` = absent from SOPS (the node would fail to
+/// boot without these).
+#[derive(Debug, Default, Clone)]
+pub struct SeedSummary {
+    pub written: Vec<String>,
+    pub unchanged: Vec<String>,
+    pub missing: Vec<String>,
+}
+
+/// Outcome of one `verify` pass — the read-back drift gate as data.
+#[derive(Debug, Default, Clone)]
+pub struct VerifySummary {
+    pub verified: Vec<String>,
+    pub drift: Vec<String>,
+}
+
+/// Build one typed SSM client for `region`. Credentials resolve from the
+/// ambient chain (AWS_PROFILE / SSO / env), the same as the aws CLI.
+pub async fn make_client(region: &str) -> aws_sdk_ssm::Client {
+    let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+        .region(aws_sdk_ssm::config::Region::new(region.to_string()))
+        .load()
+        .await;
+    aws_sdk_ssm::Client::new(&sdk_config)
+}
+
+/// Read one SecureString's current decrypted value, or `None` when the
+/// parameter does not exist (the expected first-seed case). Any other error
+/// propagates.
+async fn get_ssm_value(client: &aws_sdk_ssm::Client, name: &str) -> Result<Option<String>> {
+    match client
         .get_parameter()
         .name(name)
         .with_decryption(true)
         .send()
         .await
-        .with_context(|| format!("aws ssm get-parameter {name}"))?
-        .parameter
-        .and_then(|p| p.value)
-        .with_context(|| format!("SSM parameter {name} has no value"))?;
-    Ok(got == expected)
+    {
+        Ok(out) => Ok(out.parameter.and_then(|p| p.value)),
+        Err(e) => {
+            if e.as_service_error().map(|se| se.is_parameter_not_found()) == Some(true) {
+                Ok(None)
+            } else {
+                Err(e).with_context(|| format!("aws ssm get-parameter {name}"))
+            }
+        }
+    }
+}
+
+/// Seed every boot secret from SOPS into SSM, idempotently: a parameter whose
+/// live value already equals the SOPS source is left untouched (no new SSM
+/// version), so a converged cluster re-seeds as a pure no-op. Returns the typed
+/// summary; the caller decides policy on `missing`.
+pub async fn seed(
+    cfg: &SsmConfig,
+    client: &aws_sdk_ssm::Client,
+    dry_run: bool,
+) -> Result<SeedSummary> {
+    let mut summary = SeedSummary::default();
+    for def in SECRET_DEFS {
+        let name = format!("{}/{}", cfg.prefix, def.ssm_suffix);
+        match extract_sops(&cfg.secrets_file, &cfg.age_key_file, def.sops_paths, &cfg.cluster) {
+            Some(raw) => {
+                let value = intended_value(raw, def);
+                let current = get_ssm_value(client, &name).await?;
+                if current.as_deref() == Some(value.as_str()) {
+                    info!(param = %name, "unchanged (SSM already matches SOPS)");
+                    summary.unchanged.push(def.ssm_suffix.to_string());
+                } else {
+                    put_ssm_parameter(client, &name, &value, dry_run)
+                        .await
+                        .with_context(|| format!("seeding {name}"))?;
+                    info!(param = %name, "seeded");
+                    summary.written.push(def.ssm_suffix.to_string());
+                }
+            }
+            None => {
+                warn!(param = %name, "secret not found in SOPS — skipping");
+                summary.missing.push(def.ssm_suffix.to_string());
+            }
+        }
+    }
+    Ok(summary)
+}
+
+/// Read each SecureString back and compare to its SOPS source — the drift gate
+/// as a reusable function. Returns the typed summary; the caller decides policy
+/// on `drift`.
+pub async fn verify(cfg: &SsmConfig, client: &aws_sdk_ssm::Client) -> Result<VerifySummary> {
+    let mut summary = VerifySummary::default();
+    for def in SECRET_DEFS {
+        let name = format!("{}/{}", cfg.prefix, def.ssm_suffix);
+        let Some(raw) =
+            extract_sops(&cfg.secrets_file, &cfg.age_key_file, def.sops_paths, &cfg.cluster)
+        else {
+            summary.drift.push(format!("{} (absent from SOPS)", def.ssm_suffix));
+            continue;
+        };
+        let expected = intended_value(raw, def);
+        match get_ssm_value(client, &name).await {
+            Ok(Some(got)) if got == expected => {
+                info!(param = %name, "verified == SOPS");
+                summary.verified.push(def.ssm_suffix.to_string());
+            }
+            Ok(Some(_)) => summary.drift.push(format!("{} (SSM != SOPS)", def.ssm_suffix)),
+            Ok(None) => summary.drift.push(format!("{} (absent from SSM)", def.ssm_suffix)),
+            Err(e) => summary.drift.push(format!("{} ({e})", def.ssm_suffix)),
+        }
+    }
+    Ok(summary)
+}
+
+/// Number of boot-critical secrets a k3s node fetches (for receipts).
+pub const SECRET_COUNT: usize = SECRET_DEFS.len();
+
+/// SOPS-only presence check (no AWS): the SSM suffixes whose SOPS source is
+/// absent or empty. The fail-fast precondition before any AWS write — if the
+/// deterministic source is incomplete, the node would fail to boot, so the
+/// orchestrator refuses to proceed.
+#[must_use]
+pub fn sops_missing(cfg: &SsmConfig) -> Vec<String> {
+    SECRET_DEFS
+        .iter()
+        .filter(|def| {
+            extract_sops(&cfg.secrets_file, &cfg.age_key_file, def.sops_paths, &cfg.cluster)
+                .is_none()
+        })
+        .map(|def| def.ssm_suffix.to_string())
+        .collect()
 }
 
 pub async fn run(args: Args) -> Result<ExitCode> {
@@ -249,54 +371,43 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         .prefix
         .unwrap_or_else(|| format!("/pangea/{}/secrets", args.cluster));
 
+    let cfg = SsmConfig {
+        cluster: args.cluster,
+        prefix,
+        region: args.region,
+        secrets_file,
+        age_key_file,
+    };
+
     info!(
-        cluster = %args.cluster,
-        prefix = %prefix,
-        region = %args.region,
+        cluster = %cfg.cluster,
+        prefix = %cfg.prefix,
+        region = %cfg.region,
         dry_run = args.dry_run,
         "seeding bootstrap secrets to SSM SecureString"
     );
 
     // One typed client for the whole run (credentials resolved from the
     // ambient chain — AWS_PROFILE / SSO / env — the same as the aws CLI).
-    let sdk_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-        .region(aws_sdk_ssm::config::Region::new(args.region.clone()))
-        .load()
-        .await;
-    let client = aws_sdk_ssm::Client::new(&sdk_config);
+    let client = make_client(&cfg.region).await;
 
-    let mut written = 0usize;
-    let mut missing: Vec<String> = Vec::new();
+    let summary = seed(&cfg, &client, args.dry_run).await?;
+    info!(
+        cluster = %cfg.cluster,
+        written = summary.written.len(),
+        unchanged = summary.unchanged.len(),
+        "SSM seeding complete"
+    );
 
-    for def in SECRET_DEFS {
-        let name = format!("{}/{}", prefix, def.ssm_suffix);
-        match extract_sops(&secrets_file, &age_key_file, def.sops_paths, &args.cluster) {
-            Some(raw) => {
-                let value = intended_value(raw, def);
-                put_ssm_parameter(&client, &name, &value, args.dry_run)
-                    .await
-                    .with_context(|| format!("seeding {name}"))?;
-                info!(param = %name, "seeded");
-                written += 1;
-            }
-            None => {
-                warn!(param = %name, "secret not found in SOPS — skipping");
-                missing.push(def.ssm_suffix.to_string());
-            }
-        }
-    }
-
-    info!(cluster = %args.cluster, written, "SSM seeding complete");
-
-    if !missing.is_empty() {
+    if !summary.missing.is_empty() {
         // Fail-hard: an incompletely-seeded cluster will fail-hard at node
         // boot when kindling can't fetch a required secret. Surface it now.
         anyhow::bail!(
             "{} secret(s) missing from SOPS for cluster {}: {}. The node would \
              fail to boot without these — check the SOPS paths.",
-            missing.len(),
-            args.cluster,
-            missing.join(", ")
+            summary.missing.len(),
+            cfg.cluster,
+            summary.missing.join(", ")
         );
     }
 
@@ -306,35 +417,21 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     // reproduce the SAME identity. With --dry-run (writes skipped) this is a
     // pure read-back drift check against whatever is already seeded.
     if args.verify {
-        info!(cluster = %args.cluster, "verifying SSM SecureStrings match SOPS (drift gate)");
-        let mut drift: Vec<String> = Vec::new();
-        for def in SECRET_DEFS {
-            let name = format!("{}/{}", prefix, def.ssm_suffix);
-            let Some(raw) = extract_sops(&secrets_file, &age_key_file, def.sops_paths, &args.cluster)
-            else {
-                drift.push(format!("{} (absent from SOPS)", def.ssm_suffix));
-                continue;
-            };
-            let expected = intended_value(raw, def);
-            match verify_ssm_parameter(&client, &name, &expected).await {
-                Ok(true) => info!(param = %name, "verified == SOPS"),
-                Ok(false) => drift.push(format!("{} (SSM != SOPS)", def.ssm_suffix)),
-                Err(e) => drift.push(format!("{} ({e})", def.ssm_suffix)),
-            }
-        }
-        if !drift.is_empty() {
+        info!(cluster = %cfg.cluster, "verifying SSM SecureStrings match SOPS (drift gate)");
+        let v = verify(&cfg, &client).await?;
+        if !v.drift.is_empty() {
             anyhow::bail!(
                 "{} secret(s) DRIFTED for cluster {}: {}. SSM does not match SOPS — \
                  re-seed (drop --dry-run) to converge; otherwise the node boots a \
                  DIFFERENT identity than SOPS intends.",
-                drift.len(),
-                args.cluster,
-                drift.join(", ")
+                v.drift.len(),
+                cfg.cluster,
+                v.drift.join(", ")
             );
         }
         info!(
-            cluster = %args.cluster,
-            verified = SECRET_DEFS.len(),
+            cluster = %cfg.cluster,
+            verified = v.verified.len(),
             "all secrets match SOPS — deterministic, no drift"
         );
     }

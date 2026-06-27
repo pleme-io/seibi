@@ -9,6 +9,7 @@ mod attic_push;
 mod auto_unlock;
 mod backup;
 mod blocklist;
+mod bootstrap;
 mod claude_vm_prune;
 mod cluster_secrets;
 mod ddns;
@@ -105,6 +106,11 @@ enum Command {
     /// Seed a cluster's bootstrap secrets from SOPS into AWS SSM SecureString
     /// (the W3b secret-free boot path; run once on the host with the age key)
     SsmBootstrap(ssm_bootstrap::Args),
+    /// Idempotent cluster bootstrap — one shigoto Dag (ensure-secrets →
+    /// seed-ssm → verify-seed → declare/observe). Deterministic secrets
+    /// (SOPS→SSM, read-back drift gate); cluster+flux are declare-and-observe
+    /// (the pangea-operator plans/applies). `--dry-run` plans without writing.
+    Bootstrap(bootstrap::Args),
     /// Deploy a secret file with correct permissions and ownership
     DeploySecret(deploy_secret::Args),
     /// Bootstrap PKI material (CAs + admin cert) into SOPS for a new
@@ -177,6 +183,7 @@ async fn run(cmd: Command) -> Result<ExitCode> {
         Command::Monitor(args) => monitor::run(args).await,
         Command::ClusterSecrets(args) => cluster_secrets::run(args).await,
         Command::SsmBootstrap(args) => ssm_bootstrap::run(args).await,
+        Command::Bootstrap(args) => bootstrap::run(args).await,
         Command::DeploySecret(args) => deploy_secret::run(&args),
         Command::PkiBootstrap(args) => pki_bootstrap::run(args).await,
         Command::SopsKey(args) => sops_key::run(args).await,

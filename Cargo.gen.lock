@@ -1,21 +1,10 @@
 {
   "schema_version": 1,
-  "cargo_lock_sha256": "8abd8242a9ff83621a619e7d04685764de6a91d34a5f6b3a4b16e4f14669910a",
+  "cargo_lock_sha256": "476aab9a6bb3441e60fb150bf89d7f62f8d7205800b2656842cf5756018d2c27",
   "target_resolves": {
     "base": {
       "aho-corasick-1.1.4": {
-        "runtime_dependencies": [
-          {
-            "name": "memchr",
-            "package_key": "memchr-2.8.0",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          }
-        ],
+        "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
           "std"
@@ -49,7 +38,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -200,7 +189,9 @@
             "name": "aws_credential_types",
             "package_key": "aws-credential-types-1.2.11",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "test-util"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -221,8 +212,8 @@
             "package_key": "aws-sdk-sso-1.93.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -231,8 +222,8 @@
             "package_key": "aws-sdk-ssooidc-1.95.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -241,7 +232,7 @@
             "package_key": "aws-sdk-sts-1.97.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -280,7 +271,9 @@
             "name": "aws_smithy_runtime",
             "package_key": "aws-smithy-runtime-1.10.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -290,7 +283,9 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -447,7 +442,10 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client",
+              "http-auth"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -486,8 +484,8 @@
             "package_key": "aws-lc-sys-0.41.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -574,7 +572,9 @@
             "name": "aws_sigv4",
             "package_key": "aws-sigv4-1.3.8",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http0-compat"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -604,7 +604,9 @@
             "name": "aws_smithy_runtime",
             "package_key": "aws-smithy-runtime-1.10.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -614,7 +616,10 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client",
+              "http-1x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -624,7 +629,9 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http-body-1-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -790,7 +797,9 @@
             "name": "aws_smithy_runtime",
             "package_key": "aws-smithy-runtime-1.10.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -800,7 +809,10 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client",
+              "http-1x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -810,7 +822,9 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http-body-1-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -961,7 +975,9 @@
             "name": "aws_smithy_runtime",
             "package_key": "aws-smithy-runtime-1.10.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -971,7 +987,10 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client",
+              "http-1x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -981,7 +1000,9 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http-body-1-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1127,7 +1148,9 @@
             "name": "aws_smithy_runtime",
             "package_key": "aws-smithy-runtime-1.10.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1137,7 +1160,10 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client",
+              "http-1x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1147,7 +1173,9 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http-body-1-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1303,7 +1331,9 @@
             "name": "aws_smithy_runtime",
             "package_key": "aws-smithy-runtime-1.10.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1313,7 +1343,10 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client",
+              "http-1x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1323,7 +1356,9 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http-body-1-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1429,7 +1464,9 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1511,7 +1548,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1561,7 +1598,7 @@
             "package_key": "futures-util-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -1600,7 +1637,10 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client",
+              "http-1x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1610,7 +1650,10 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "byte-stream-poll-next",
+              "http-body-1-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1651,7 +1694,7 @@
             "package_key": "futures-util-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -1746,7 +1789,9 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -1768,7 +1813,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1788,7 +1833,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1798,7 +1843,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1808,7 +1853,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1816,9 +1861,15 @@
             "name": "hyper_0_14",
             "package_key": "hyper-0.14.32",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "features": [
+              "client",
+              "http1",
+              "http2",
+              "stream",
+              "tcp"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1840,9 +1891,16 @@
             "name": "legacy_hyper_rustls",
             "package_key": "hyper-rustls-0.24.2",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "features": [
+              "acceptor",
+              "http1",
+              "http2",
+              "logging",
+              "tls12",
+              "tokio-runtime"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1850,9 +1908,14 @@
             "name": "hyper_rustls",
             "package_key": "hyper-rustls-0.27.7",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "features": [
+              "http1",
+              "http2",
+              "native-tokio",
+              "tls12"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1860,9 +1923,12 @@
             "name": "hyper_util",
             "package_key": "hyper-util-0.1.20",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http1",
+              "http2"
+            ],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1882,7 +1948,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1902,7 +1968,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1910,9 +1976,11 @@
             "name": "rustls_pki_types",
             "package_key": "rustls-pki-types-1.14.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "std"
+            ],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -1931,8 +1999,8 @@
             "package_key": "tokio-rustls-0.26.4",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -2003,7 +2071,9 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http-body-1-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -2051,7 +2121,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -2079,7 +2149,9 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http-body-0-4-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -2221,7 +2293,9 @@
             "name": "aws_smithy_types",
             "package_key": "aws-smithy-types-1.4.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "http-body-1-x"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -2348,7 +2422,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -2378,7 +2452,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -2388,7 +2462,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -2398,7 +2472,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -2480,7 +2554,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           }
@@ -2536,7 +2610,9 @@
             "name": "aws_smithy_runtime_api",
             "package_key": "aws-smithy-runtime-api-1.11.3",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -2739,9 +2815,11 @@
             "name": "iana_time_zone",
             "package_key": "iana-time-zone-0.1.65",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "fallback"
+            ],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": "cfg(unix)",
             "tree": "target"
           },
@@ -2750,7 +2828,7 @@
             "package_key": "num-traits-0.2.19",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -2956,7 +3034,7 @@
           "std"
         ]
       },
-      "convergence-trait-0.1.0": {
+      "convergence-trait-0.1.0-d9f50bb653c220f2029dabf778846b3beb2708b3": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -3000,7 +3078,9 @@
             "name": "generic_array",
             "package_key": "generic-array-0.14.7",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "more_lengths"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -3049,7 +3129,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -3192,16 +3272,6 @@
             "features": [],
             "uses_default_features": false,
             "optional": false,
-            "target": "cfg(unix)",
-            "tree": "target"
-          },
-          {
-            "name": "libc",
-            "package_key": "libc-0.2.183",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": false,
             "target": "cfg(target_os = \"hermit\")",
             "tree": "target"
           },
@@ -3213,6 +3283,16 @@
             "uses_default_features": false,
             "optional": false,
             "target": "cfg(target_os = \"wasi\")",
+            "tree": "target"
+          },
+          {
+            "name": "libc",
+            "package_key": "libc-0.2.183",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": false,
+            "optional": false,
+            "target": "cfg(unix)",
             "tree": "target"
           }
         ],
@@ -3256,7 +3336,7 @@
             "package_key": "percent-encoding-2.3.2",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3281,7 +3361,7 @@
             "package_key": "futures-core-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3327,7 +3407,7 @@
             "package_key": "futures-core-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3337,7 +3417,7 @@
             "package_key": "futures-task-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3370,7 +3450,7 @@
           "std"
         ]
       },
-      "gen-macros-0.1.9": {
+      "gen-macros-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": {
         "runtime_dependencies": [
           {
             "name": "proc_macro2",
@@ -3397,8 +3477,8 @@
             "package_key": "syn-2.0.117",
             "kind": "normal",
             "features": [
-              "full",
-              "extra-traits"
+              "extra-traits",
+              "full"
             ],
             "uses_default_features": true,
             "optional": false,
@@ -3409,11 +3489,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "gen-platform-0.1.9": {
+      "gen-platform-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": {
         "runtime_dependencies": [
           {
             "name": "gen_macros",
-            "package_key": "gen-macros-0.1.9",
+            "package_key": "gen-macros-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3423,7 +3503,7 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.9",
+            "package_key": "gen-types-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -3477,7 +3557,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "gen-types-0.1.9": {
+      "gen-types-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": {
         "runtime_dependencies": [
           {
             "name": "blake3",
@@ -3745,7 +3825,7 @@
             "package_key": "futures-core-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3755,7 +3835,7 @@
             "package_key": "futures-sink-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3765,7 +3845,7 @@
             "package_key": "futures-util-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3818,7 +3898,10 @@
             "name": "tokio_util",
             "package_key": "tokio-util-0.7.18",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "codec",
+              "io"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -3877,7 +3960,7 @@
             "package_key": "futures-core-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3887,7 +3970,7 @@
             "package_key": "futures-sink-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -3940,7 +4023,10 @@
             "name": "tokio_util",
             "package_key": "tokio-util-0.7.18",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "codec",
+              "io"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -4143,7 +4229,7 @@
             "package_key": "futures-core-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -4224,7 +4310,7 @@
             "package_key": "futures-core-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -4234,7 +4320,7 @@
             "package_key": "futures-util-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -4387,7 +4473,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4407,7 +4493,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4417,7 +4503,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4477,7 +4563,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4487,7 +4573,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4542,7 +4628,7 @@
             "package_key": "futures-util-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -4604,7 +4690,7 @@
             "package_key": "tokio-rustls-0.24.1",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -4647,8 +4733,11 @@
             "name": "hyper_util",
             "package_key": "hyper-util-0.1.20",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
+            "features": [
+              "client-legacy",
+              "tokio"
+            ],
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -4669,7 +4758,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4698,7 +4787,7 @@
             "package_key": "tokio-rustls-0.26.4",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -4719,7 +4808,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           }
@@ -4764,7 +4853,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4773,8 +4862,8 @@
             "package_key": "futures-util-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4834,7 +4923,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -4876,7 +4965,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -5042,16 +5131,6 @@
           {
             "name": "icu_normalizer_data",
             "package_key": "icu_normalizer_data-2.1.1",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "icu_properties",
-            "package_key": "icu_properties-2.1.2",
             "kind": "normal",
             "features": [],
             "uses_default_features": false,
@@ -5389,30 +5468,7 @@
         ]
       },
       "iri-string-0.7.10": {
-        "runtime_dependencies": [
-          {
-            "name": "memchr",
-            "package_key": "memchr-2.8.0",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "serde",
-            "package_key": "serde-1.0.228",
-            "kind": "normal",
-            "features": [
-              "derive"
-            ],
-            "uses_default_features": false,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          }
-        ],
+        "runtime_dependencies": [],
         "build_dependencies": [],
         "features": [
           "alloc",
@@ -5485,8 +5541,12 @@
             "name": "regex_automata",
             "package_key": "regex-automata-0.4.14",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
+            "features": [
+              "dfa-build",
+              "dfa-search",
+              "syntax"
+            ],
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -5513,16 +5573,6 @@
             "features": [],
             "uses_default_features": true,
             "optional": false,
-            "target": "cfg(unix)",
-            "tree": "target"
-          },
-          {
-            "name": "libc",
-            "package_key": "libc-0.2.183",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
             "target": "cfg(target_os = \"hermit\")",
             "tree": "target"
           },
@@ -5534,6 +5584,16 @@
             "uses_default_features": true,
             "optional": false,
             "target": "cfg(target_os = \"wasi\")",
+            "tree": "target"
+          },
+          {
+            "name": "libc",
+            "package_key": "libc-0.2.183",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": "cfg(unix)",
             "tree": "target"
           }
         ],
@@ -5616,8 +5676,10 @@
             "name": "num_traits",
             "package_key": "num-traits-0.2.19",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
+            "features": [
+              "i128"
+            ],
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -5679,16 +5741,6 @@
             ],
             "uses_default_features": false,
             "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "serde_core",
-            "package_key": "serde_core-1.0.228",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": true,
             "target": null,
             "tree": "target"
           }
@@ -5796,8 +5848,8 @@
             "package_key": "time-0.3.47",
             "kind": "normal",
             "features": [
-              "parsing",
-              "formatting"
+              "formatting",
+              "parsing"
             ],
             "uses_default_features": true,
             "optional": false,
@@ -6068,9 +6120,11 @@
             "name": "ring",
             "package_key": "ring-0.17.14",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "wasm32_unknown_unknown_js"
+            ],
             "uses_default_features": true,
-            "optional": true,
+            "optional": false,
             "target": "cfg(all(target_family = \"wasm\", target_os = \"unknown\"))",
             "tree": "target"
           },
@@ -6206,7 +6260,7 @@
             "package_key": "proc-macro2-1.0.106",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -6258,8 +6312,10 @@
             "name": "ppv_lite86",
             "package_key": "ppv-lite86-0.2.21",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
+            "features": [
+              "simd"
+            ],
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -6346,8 +6402,8 @@
             "package_key": "yasna-0.5.2",
             "kind": "normal",
             "features": [
-              "time",
-              "std"
+              "std",
+              "time"
             ],
             "uses_default_features": true,
             "optional": false,
@@ -6365,32 +6421,12 @@
       "regex-automata-0.4.14": {
         "runtime_dependencies": [
           {
-            "name": "aho_corasick",
-            "package_key": "aho-corasick-1.1.4",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "memchr",
-            "package_key": "memchr-2.8.0",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
             "name": "regex_syntax",
             "package_key": "regex-syntax-0.8.10",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           }
@@ -6448,7 +6484,7 @@
             "package_key": "futures-core-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -6488,8 +6524,8 @@
             "package_key": "hyper-1.8.1",
             "kind": "normal",
             "features": [
-              "http1",
-              "client"
+              "client",
+              "http1"
             ],
             "uses_default_features": true,
             "optional": false,
@@ -6500,9 +6536,12 @@
             "name": "hyper_rustls",
             "package_key": "hyper-rustls-0.27.7",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "features": [
+              "http1",
+              "tls12"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": "cfg(not(target_arch = \"wasm32\"))",
             "tree": "target"
           },
@@ -6510,7 +6549,13 @@
             "name": "hyper_util",
             "package_key": "hyper-util-0.1.20",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "client",
+              "client-legacy",
+              "client-proxy",
+              "http1",
+              "tokio"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": "cfg(not(target_arch = \"wasm32\"))",
@@ -6547,19 +6592,6 @@
             "tree": "target"
           },
           {
-            "name": "quinn",
-            "package_key": "quinn-0.11.9",
-            "kind": "normal",
-            "features": [
-              "rustls",
-              "runtime-tokio"
-            ],
-            "uses_default_features": false,
-            "optional": true,
-            "target": "cfg(not(target_arch = \"wasm32\"))",
-            "tree": "target"
-          },
-          {
             "name": "rustls",
             "package_key": "rustls-0.23.37",
             "kind": "normal",
@@ -6576,9 +6608,11 @@
             "name": "rustls_pki_types",
             "package_key": "rustls-pki-types-1.14.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "std"
+            ],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": "cfg(not(target_arch = \"wasm32\"))",
             "tree": "target"
           },
@@ -6608,7 +6642,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": true,
+            "optional": false,
             "target": "cfg(target_arch = \"wasm32\")",
             "tree": "target"
           },
@@ -6651,9 +6685,11 @@
             "name": "tokio_rustls",
             "package_key": "tokio-rustls-0.26.4",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "features": [
+              "tls12"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": "cfg(not(target_arch = \"wasm32\"))",
             "tree": "target"
           },
@@ -6675,8 +6711,10 @@
             "name": "tower_http",
             "package_key": "tower-http-0.6.8",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
+            "features": [
+              "follow-redirect"
+            ],
+            "uses_default_features": false,
             "optional": false,
             "target": "cfg(not(target_arch = \"wasm32\"))",
             "tree": "target"
@@ -6707,7 +6745,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": "cfg(not(target_arch = \"wasm32\"))",
             "tree": "target"
           }
@@ -6808,8 +6846,8 @@
             "package_key": "aws-lc-rs-1.17.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -6840,7 +6878,9 @@
             "name": "pki_types",
             "package_key": "rustls-pki-types-1.14.0",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "alloc"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -6948,8 +6988,8 @@
             "package_key": "aws-lc-rs-1.17.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -6968,7 +7008,7 @@
             "package_key": "rustls-pki-types-1.14.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -7149,7 +7189,10 @@
             "name": "aws_config",
             "package_key": "aws-config-1.8.13",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "behavior-version-latest",
+              "sso"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -7200,7 +7243,7 @@
           },
           {
             "name": "convergence_trait",
-            "package_key": "convergence-trait-0.1.0",
+            "package_key": "convergence-trait-0.1.0-d9f50bb653c220f2029dabf778846b3beb2708b3",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7310,7 +7353,7 @@
           },
           {
             "name": "shigoto_dag",
-            "package_key": "shigoto-dag-0.1.5",
+            "package_key": "shigoto-dag-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7320,7 +7363,17 @@
           },
           {
             "name": "shigoto_emit",
-            "package_key": "shigoto-emit-0.1.5",
+            "package_key": "shigoto-emit-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
+            "kind": "normal",
+            "features": [],
+            "uses_default_features": true,
+            "optional": false,
+            "target": null,
+            "tree": "target"
+          },
+          {
+            "name": "shigoto_gate",
+            "package_key": "shigoto-gate-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7330,7 +7383,7 @@
           },
           {
             "name": "shigoto_retry",
-            "package_key": "shigoto-retry-0.1.5",
+            "package_key": "shigoto-retry-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7340,7 +7393,7 @@
           },
           {
             "name": "shigoto_scheduler",
-            "package_key": "shigoto-scheduler-0.1.5",
+            "package_key": "shigoto-scheduler-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7350,7 +7403,7 @@
           },
           {
             "name": "shigoto_types",
-            "package_key": "shigoto-types-0.1.5",
+            "package_key": "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7386,10 +7439,10 @@
             "kind": "normal",
             "features": [
               "macros",
-              "rt-multi-thread",
               "process",
-              "time",
-              "signal"
+              "rt-multi-thread",
+              "signal",
+              "time"
             ],
             "uses_default_features": true,
             "optional": false,
@@ -7420,7 +7473,10 @@
             "name": "tracing_subscriber",
             "package_key": "tracing-subscriber-0.3.22",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "env-filter",
+              "json"
+            ],
             "uses_default_features": true,
             "optional": false,
             "target": null,
@@ -7428,7 +7484,7 @@
           },
           {
             "name": "tsunagu",
-            "package_key": "tsunagu-0.1.1",
+            "package_key": "tsunagu-0.1.1-64c06a1ff895409209d626db3469181bb24f9afd",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7507,8 +7563,10 @@
             "name": "proc_macro2",
             "package_key": "proc-macro2-1.0.106",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
+            "features": [
+              "proc-macro"
+            ],
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -7554,7 +7612,7 @@
             "package_key": "proc-macro2-1.0.106",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -7794,7 +7852,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "shigoto-budget-0.1.5": {
+      "shigoto-budget-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -7810,7 +7868,7 @@
           },
           {
             "name": "shigoto_types",
-            "package_key": "shigoto-types-0.1.5",
+            "package_key": "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7832,7 +7890,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "shigoto-dag-0.1.5": {
+      "shigoto-dag-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
         "runtime_dependencies": [
           {
             "name": "petgraph",
@@ -7858,7 +7916,7 @@
           },
           {
             "name": "shigoto_types",
-            "package_key": "shigoto-types-0.1.5",
+            "package_key": "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7880,7 +7938,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "shigoto-emit-0.1.5": {
+      "shigoto-emit-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
         "runtime_dependencies": [
           {
             "name": "async_trait",
@@ -7916,7 +7974,7 @@
           },
           {
             "name": "shigoto_types",
-            "package_key": "shigoto-types-0.1.5",
+            "package_key": "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7938,11 +7996,11 @@
         "build_dependencies": [],
         "features": []
       },
-      "shigoto-gate-0.1.5": {
+      "shigoto-gate-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
         "runtime_dependencies": [
           {
             "name": "shigoto_dag",
-            "package_key": "shigoto-dag-0.1.5",
+            "package_key": "shigoto-dag-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7952,7 +8010,7 @@
           },
           {
             "name": "shigoto_types",
-            "package_key": "shigoto-types-0.1.5",
+            "package_key": "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7964,7 +8022,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "shigoto-retry-0.1.5": {
+      "shigoto-retry-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
         "runtime_dependencies": [
           {
             "name": "serde",
@@ -7980,7 +8038,7 @@
           },
           {
             "name": "shigoto_types",
-            "package_key": "shigoto-types-0.1.5",
+            "package_key": "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -7992,7 +8050,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "shigoto-scheduler-0.1.5": {
+      "shigoto-scheduler-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
         "runtime_dependencies": [
           {
             "name": "anyhow",
@@ -8028,7 +8086,7 @@
           },
           {
             "name": "shigoto_budget",
-            "package_key": "shigoto-budget-0.1.5",
+            "package_key": "shigoto-budget-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -8038,7 +8096,7 @@
           },
           {
             "name": "shigoto_dag",
-            "package_key": "shigoto-dag-0.1.5",
+            "package_key": "shigoto-dag-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -8048,7 +8106,7 @@
           },
           {
             "name": "shigoto_emit",
-            "package_key": "shigoto-emit-0.1.5",
+            "package_key": "shigoto-emit-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -8058,7 +8116,7 @@
           },
           {
             "name": "shigoto_gate",
-            "package_key": "shigoto-gate-0.1.5",
+            "package_key": "shigoto-gate-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -8068,7 +8126,7 @@
           },
           {
             "name": "shigoto_retry",
-            "package_key": "shigoto-retry-0.1.5",
+            "package_key": "shigoto-retry-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -8078,7 +8136,7 @@
           },
           {
             "name": "shigoto_types",
-            "package_key": "shigoto-types-0.1.5",
+            "package_key": "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -8101,8 +8159,8 @@
             "package_key": "tokio-1.50.0",
             "kind": "normal",
             "features": [
-              "rt-multi-thread",
               "macros",
+              "rt-multi-thread",
               "sync",
               "time"
             ],
@@ -8125,7 +8183,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "shigoto-types-0.1.5": {
+      "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
         "runtime_dependencies": [
           {
             "name": "async_trait",
@@ -8151,7 +8209,7 @@
           },
           {
             "name": "gen_platform",
-            "package_key": "gen-platform-0.1.9",
+            "package_key": "gen-platform-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -8161,7 +8219,7 @@
           },
           {
             "name": "gen_types",
-            "package_key": "gen-types-0.1.9",
+            "package_key": "gen-types-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b",
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
@@ -8325,7 +8383,7 @@
             "package_key": "proc-macro2-1.0.106",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -8373,8 +8431,8 @@
             "package_key": "futures-core-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           }
@@ -8392,7 +8450,7 @@
             "package_key": "proc-macro2-1.0.106",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -8412,12 +8470,12 @@
             "package_key": "syn-2.0.117",
             "kind": "normal",
             "features": [
+              "clone-impls",
               "derive",
+              "extra-traits",
               "parsing",
               "printing",
-              "clone-impls",
-              "visit",
-              "extra-traits"
+              "visit"
             ],
             "uses_default_features": false,
             "optional": false,
@@ -8547,16 +8605,6 @@
             "tree": "target"
           },
           {
-            "name": "serde_core",
-            "package_key": "serde_core-1.0.228",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": false,
-            "optional": true,
-            "target": null,
-            "tree": "target"
-          },
-          {
             "name": "time_core",
             "package_key": "time-core-0.1.8",
             "kind": "normal",
@@ -8565,16 +8613,6 @@
             "optional": false,
             "target": null,
             "tree": "target"
-          },
-          {
-            "name": "time_macros",
-            "package_key": "time-macros-0.2.27",
-            "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "host"
           }
         ],
         "build_dependencies": [],
@@ -8719,7 +8757,10 @@
             "name": "mio",
             "package_key": "mio-1.1.1",
             "kind": "normal",
-            "features": [],
+            "features": [
+              "os-ext",
+              "os-poll"
+            ],
             "uses_default_features": false,
             "optional": true,
             "target": "cfg(all(tokio_unstable, target_os = \"linux\"))",
@@ -8741,7 +8782,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": "cfg(unix)",
             "tree": "target"
           },
@@ -8763,7 +8804,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "host"
           }
@@ -8958,7 +8999,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -8966,9 +9007,11 @@
             "name": "futures_util",
             "package_key": "futures-util-0.3.32",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "features": [
+              "alloc"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -8978,7 +9021,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -9062,8 +9105,8 @@
             "package_key": "futures-util-0.3.32",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -9083,7 +9126,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -9093,7 +9136,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -9174,7 +9217,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "host"
           },
@@ -9183,7 +9226,7 @@
             "package_key": "tracing-core-0.1.36",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -9224,13 +9267,13 @@
             "package_key": "syn-2.0.117",
             "kind": "normal",
             "features": [
+              "clone-impls",
+              "extra-traits",
               "full",
               "parsing",
               "printing",
-              "visit-mut",
-              "clone-impls",
-              "extra-traits",
-              "proc-macro"
+              "proc-macro",
+              "visit-mut"
             ],
             "uses_default_features": false,
             "optional": false,
@@ -9344,7 +9387,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -9362,9 +9405,11 @@
             "name": "regex_automata",
             "package_key": "regex-automata-0.4.14",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "features": [
+              "std"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -9394,7 +9439,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -9433,7 +9478,7 @@
             "package_key": "tracing-core-0.1.36",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -9442,9 +9487,12 @@
             "name": "tracing_log",
             "package_key": "tracing-log-0.2.0",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "features": [
+              "log-tracer",
+              "std"
+            ],
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           },
@@ -9454,7 +9502,7 @@
             "kind": "normal",
             "features": [],
             "uses_default_features": true,
-            "optional": false,
+            "optional": true,
             "target": null,
             "tree": "target"
           }
@@ -9487,7 +9535,7 @@
         "build_dependencies": [],
         "features": []
       },
-      "tsunagu-0.1.1": {
+      "tsunagu-0.1.1-64c06a1ff895409209d626db3469181bb24f9afd": {
         "runtime_dependencies": [
           {
             "name": "dirs",
@@ -9536,13 +9584,13 @@
             "package_key": "tokio-1.50.0",
             "kind": "normal",
             "features": [
-              "rt",
+              "io-util",
+              "macros",
               "net",
+              "rt",
               "signal",
               "sync",
-              "macros",
-              "time",
-              "io-util"
+              "time"
             ],
             "uses_default_features": true,
             "optional": false,
@@ -9616,19 +9664,11 @@
             "name": "percent_encoding",
             "package_key": "percent-encoding-2.3.2",
             "kind": "normal",
-            "features": [],
-            "uses_default_features": true,
-            "optional": false,
-            "target": null,
-            "tree": "target"
-          },
-          {
-            "name": "serde",
-            "package_key": "serde-1.0.228",
-            "kind": "normal",
-            "features": [],
+            "features": [
+              "alloc"
+            ],
             "uses_default_features": false,
-            "optional": true,
+            "optional": false,
             "target": null,
             "tree": "target"
           }
@@ -9701,7 +9741,7 @@
             "package_key": "rustls-pki-types-1.14.0",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
+            "uses_default_features": false,
             "optional": false,
             "target": null,
             "tree": "target"
@@ -9762,8 +9802,8 @@
             "package_key": "yoke-derive-0.8.1",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "host"
           },
@@ -9846,8 +9886,8 @@
             "package_key": "zerofrom-derive-0.1.6",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "host"
           }
@@ -9981,8 +10021,8 @@
             "package_key": "zerovec-derive-0.11.2",
             "kind": "normal",
             "features": [],
-            "uses_default_features": true,
-            "optional": false,
+            "uses_default_features": false,
+            "optional": true,
             "target": null,
             "tree": "host"
           }
@@ -10107,7 +10147,7 @@
                 "package_key": "core-foundation-sys-0.8.7",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": true,
+                "uses_default_features": false,
                 "optional": false,
                 "target": null,
                 "tree": "target"
@@ -10208,7 +10248,7 @@
                 "package_key": "cfg-if-1.0.4",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": true,
+                "uses_default_features": false,
                 "optional": false,
                 "target": null,
                 "tree": "target"
@@ -10279,7 +10319,9 @@
                 "name": "pki_types",
                 "package_key": "rustls-pki-types-1.14.0",
                 "kind": "normal",
-                "features": [],
+                "features": [
+                  "std"
+                ],
                 "uses_default_features": true,
                 "optional": false,
                 "target": null,
@@ -10346,7 +10388,7 @@
                 "package_key": "security-framework-sys-2.17.0",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": true,
+                "uses_default_features": false,
                 "optional": false,
                 "target": null,
                 "tree": "target"
@@ -10377,6 +10419,450 @@
                 "package_key": "libc-0.2.183",
                 "kind": "normal",
                 "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [],
+            "features": []
+          }
+        }
+      },
+      "aarch64-unknown-linux-gnu": {
+        "overrides": {
+          "blake3-1.8.5": {
+            "runtime_dependencies": [
+              {
+                "name": "arrayref",
+                "package_key": "arrayref-0.3.9",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "arrayvec",
+                "package_key": "arrayvec-0.7.6",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "cfg_if",
+                "package_key": "cfg-if-1.0.4",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "constant_time_eq",
+                "package_key": "constant_time_eq-0.4.2",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [
+              {
+                "name": "cc",
+                "package_key": "cc-1.2.56",
+                "kind": "build",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "host"
+              }
+            ],
+            "features": [
+              "default",
+              "std"
+            ]
+          },
+          "cpufeatures-0.2.17": {
+            "runtime_dependencies": [
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "aarch64-linux-android",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [],
+            "features": []
+          },
+          "iana-time-zone-0.1.65": {
+            "runtime_dependencies": [],
+            "build_dependencies": [],
+            "features": [
+              "fallback"
+            ]
+          },
+          "openssl-probe-0.2.1": {
+            "runtime_dependencies": [],
+            "build_dependencies": [],
+            "features": []
+          },
+          "ring-0.17.14": {
+            "runtime_dependencies": [
+              {
+                "name": "cfg_if",
+                "package_key": "cfg-if-1.0.4",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "getrandom",
+                "package_key": "getrandom-0.2.17",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(all(target_arch = \"aarch64\", target_endian = \"little\"), target_vendor = \"apple\", any(target_os = \"ios\", target_os = \"macos\", target_os = \"tvos\", target_os = \"visionos\", target_os = \"watchos\")))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(any(all(target_arch = \"aarch64\", target_endian = \"little\"), all(target_arch = \"arm\", target_endian = \"little\")), any(target_os = \"android\", target_os = \"linux\")))",
+                "tree": "target"
+              },
+              {
+                "name": "untrusted",
+                "package_key": "untrusted-0.9.0",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [
+              {
+                "name": "cc",
+                "package_key": "cc-1.2.56",
+                "kind": "build",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": null,
+                "tree": "host"
+              }
+            ],
+            "features": [
+              "alloc",
+              "default",
+              "dev_urandom_fallback",
+              "wasm32_unknown_unknown_js"
+            ]
+          },
+          "rustls-native-certs-0.8.4": {
+            "runtime_dependencies": [
+              {
+                "name": "openssl_probe",
+                "package_key": "openssl-probe-0.2.1",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": "cfg(all(unix, not(target_os = \"macos\")))",
+                "tree": "target"
+              },
+              {
+                "name": "pki_types",
+                "package_key": "rustls-pki-types-1.14.0",
+                "kind": "normal",
+                "features": [
+                  "std"
+                ],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [],
+            "features": []
+          }
+        }
+      },
+      "aarch64-unknown-linux-musl": {
+        "overrides": {
+          "blake3-1.8.5": {
+            "runtime_dependencies": [
+              {
+                "name": "arrayref",
+                "package_key": "arrayref-0.3.9",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "arrayvec",
+                "package_key": "arrayvec-0.7.6",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "cfg_if",
+                "package_key": "cfg-if-1.0.4",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "constant_time_eq",
+                "package_key": "constant_time_eq-0.4.2",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [
+              {
+                "name": "cc",
+                "package_key": "cc-1.2.56",
+                "kind": "build",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "host"
+              }
+            ],
+            "features": [
+              "default",
+              "std"
+            ]
+          },
+          "cpufeatures-0.2.17": {
+            "runtime_dependencies": [
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "aarch64-linux-android",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))",
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [],
+            "features": []
+          },
+          "iana-time-zone-0.1.65": {
+            "runtime_dependencies": [],
+            "build_dependencies": [],
+            "features": [
+              "fallback"
+            ]
+          },
+          "openssl-probe-0.2.1": {
+            "runtime_dependencies": [],
+            "build_dependencies": [],
+            "features": []
+          },
+          "ring-0.17.14": {
+            "runtime_dependencies": [
+              {
+                "name": "cfg_if",
+                "package_key": "cfg-if-1.0.4",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "getrandom",
+                "package_key": "getrandom-0.2.17",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(all(target_arch = \"aarch64\", target_endian = \"little\"), target_vendor = \"apple\", any(target_os = \"ios\", target_os = \"macos\", target_os = \"tvos\", target_os = \"visionos\", target_os = \"watchos\")))",
+                "tree": "target"
+              },
+              {
+                "name": "libc",
+                "package_key": "libc-0.2.183",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": "cfg(all(any(all(target_arch = \"aarch64\", target_endian = \"little\"), all(target_arch = \"arm\", target_endian = \"little\")), any(target_os = \"android\", target_os = \"linux\")))",
+                "tree": "target"
+              },
+              {
+                "name": "untrusted",
+                "package_key": "untrusted-0.9.0",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": null,
+                "tree": "target"
+              }
+            ],
+            "build_dependencies": [
+              {
+                "name": "cc",
+                "package_key": "cc-1.2.56",
+                "kind": "build",
+                "features": [],
+                "uses_default_features": false,
+                "optional": false,
+                "target": null,
+                "tree": "host"
+              }
+            ],
+            "features": [
+              "alloc",
+              "default",
+              "dev_urandom_fallback",
+              "wasm32_unknown_unknown_js"
+            ]
+          },
+          "rustls-native-certs-0.8.4": {
+            "runtime_dependencies": [
+              {
+                "name": "openssl_probe",
+                "package_key": "openssl-probe-0.2.1",
+                "kind": "normal",
+                "features": [],
+                "uses_default_features": true,
+                "optional": false,
+                "target": "cfg(all(unix, not(target_os = \"macos\")))",
+                "tree": "target"
+              },
+              {
+                "name": "pki_types",
+                "package_key": "rustls-pki-types-1.14.0",
+                "kind": "normal",
+                "features": [
+                  "std"
+                ],
                 "uses_default_features": true,
                 "optional": false,
                 "target": null,
@@ -10467,7 +10953,7 @@
                 "package_key": "core-foundation-sys-0.8.7",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": true,
+                "uses_default_features": false,
                 "optional": false,
                 "target": null,
                 "tree": "target"
@@ -10532,7 +11018,7 @@
                 "package_key": "cfg-if-1.0.4",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": true,
+                "uses_default_features": false,
                 "optional": false,
                 "target": null,
                 "tree": "target"
@@ -10583,7 +11069,9 @@
                 "name": "pki_types",
                 "package_key": "rustls-pki-types-1.14.0",
                 "kind": "normal",
-                "features": [],
+                "features": [
+                  "std"
+                ],
                 "uses_default_features": true,
                 "optional": false,
                 "target": null,
@@ -10650,7 +11138,7 @@
                 "package_key": "security-framework-sys-2.17.0",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": true,
+                "uses_default_features": false,
                 "optional": false,
                 "target": null,
                 "tree": "target"
@@ -10793,7 +11281,7 @@
                 "package_key": "cfg-if-1.0.4",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": true,
+                "uses_default_features": false,
                 "optional": false,
                 "target": null,
                 "tree": "target"
@@ -10854,7 +11342,9 @@
                 "name": "pki_types",
                 "package_key": "rustls-pki-types-1.14.0",
                 "kind": "normal",
-                "features": [],
+                "features": [
+                  "std"
+                ],
                 "uses_default_features": true,
                 "optional": false,
                 "target": null,
@@ -10967,7 +11457,7 @@
                 "package_key": "cfg-if-1.0.4",
                 "kind": "normal",
                 "features": [],
-                "uses_default_features": true,
+                "uses_default_features": false,
                 "optional": false,
                 "target": null,
                 "tree": "target"
@@ -11028,447 +11518,9 @@
                 "name": "pki_types",
                 "package_key": "rustls-pki-types-1.14.0",
                 "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": []
-          }
-        }
-      },
-      "aarch64-unknown-linux-gnu": {
-        "overrides": {
-          "blake3-1.8.5": {
-            "runtime_dependencies": [
-              {
-                "name": "arrayref",
-                "package_key": "arrayref-0.3.9",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "arrayvec",
-                "package_key": "arrayvec-0.7.6",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "constant_time_eq",
-                "package_key": "constant_time_eq-0.4.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [
-              {
-                "name": "cc",
-                "package_key": "cc-1.2.56",
-                "kind": "build",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              }
-            ],
-            "features": [
-              "default",
-              "std"
-            ]
-          },
-          "cpufeatures-0.2.17": {
-            "runtime_dependencies": [
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "aarch64-linux-android",
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))",
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))",
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))",
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": []
-          },
-          "iana-time-zone-0.1.65": {
-            "runtime_dependencies": [],
-            "build_dependencies": [],
-            "features": [
-              "fallback"
-            ]
-          },
-          "openssl-probe-0.2.1": {
-            "runtime_dependencies": [],
-            "build_dependencies": [],
-            "features": []
-          },
-          "ring-0.17.14": {
-            "runtime_dependencies": [
-              {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "getrandom",
-                "package_key": "getrandom-0.2.17",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(all(target_arch = \"aarch64\", target_endian = \"little\"), target_vendor = \"apple\", any(target_os = \"ios\", target_os = \"macos\", target_os = \"tvos\", target_os = \"visionos\", target_os = \"watchos\")))",
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(any(all(target_arch = \"aarch64\", target_endian = \"little\"), all(target_arch = \"arm\", target_endian = \"little\")), any(target_os = \"android\", target_os = \"linux\")))",
-                "tree": "target"
-              },
-              {
-                "name": "untrusted",
-                "package_key": "untrusted-0.9.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [
-              {
-                "name": "cc",
-                "package_key": "cc-1.2.56",
-                "kind": "build",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              }
-            ],
-            "features": [
-              "alloc",
-              "default",
-              "dev_urandom_fallback",
-              "wasm32_unknown_unknown_js"
-            ]
-          },
-          "rustls-native-certs-0.8.4": {
-            "runtime_dependencies": [
-              {
-                "name": "openssl_probe",
-                "package_key": "openssl-probe-0.2.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(all(unix, not(target_os = \"macos\")))",
-                "tree": "target"
-              },
-              {
-                "name": "pki_types",
-                "package_key": "rustls-pki-types-1.14.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": []
-          }
-        }
-      },
-      "aarch64-unknown-linux-musl": {
-        "overrides": {
-          "blake3-1.8.5": {
-            "runtime_dependencies": [
-              {
-                "name": "arrayref",
-                "package_key": "arrayref-0.3.9",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "arrayvec",
-                "package_key": "arrayvec-0.7.6",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "constant_time_eq",
-                "package_key": "constant_time_eq-0.4.2",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [
-              {
-                "name": "cc",
-                "package_key": "cc-1.2.56",
-                "kind": "build",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              }
-            ],
-            "features": [
-              "default",
-              "std"
-            ]
-          },
-          "cpufeatures-0.2.17": {
-            "runtime_dependencies": [
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "aarch64-linux-android",
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(target_arch = \"aarch64\", target_os = \"linux\"))",
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(target_arch = \"aarch64\", target_vendor = \"apple\"))",
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(target_arch = \"loongarch64\", target_os = \"linux\"))",
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [],
-            "features": []
-          },
-          "iana-time-zone-0.1.65": {
-            "runtime_dependencies": [],
-            "build_dependencies": [],
-            "features": [
-              "fallback"
-            ]
-          },
-          "openssl-probe-0.2.1": {
-            "runtime_dependencies": [],
-            "build_dependencies": [],
-            "features": []
-          },
-          "ring-0.17.14": {
-            "runtime_dependencies": [
-              {
-                "name": "cfg_if",
-                "package_key": "cfg-if-1.0.4",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "getrandom",
-                "package_key": "getrandom-0.2.17",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(all(target_arch = \"aarch64\", target_endian = \"little\"), target_vendor = \"apple\", any(target_os = \"ios\", target_os = \"macos\", target_os = \"tvos\", target_os = \"visionos\", target_os = \"watchos\")))",
-                "tree": "target"
-              },
-              {
-                "name": "libc",
-                "package_key": "libc-0.2.183",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": "cfg(all(any(all(target_arch = \"aarch64\", target_endian = \"little\"), all(target_arch = \"arm\", target_endian = \"little\")), any(target_os = \"android\", target_os = \"linux\")))",
-                "tree": "target"
-              },
-              {
-                "name": "untrusted",
-                "package_key": "untrusted-0.9.0",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": null,
-                "tree": "target"
-              }
-            ],
-            "build_dependencies": [
-              {
-                "name": "cc",
-                "package_key": "cc-1.2.56",
-                "kind": "build",
-                "features": [],
-                "uses_default_features": false,
-                "optional": false,
-                "target": null,
-                "tree": "host"
-              }
-            ],
-            "features": [
-              "alloc",
-              "default",
-              "dev_urandom_fallback",
-              "wasm32_unknown_unknown_js"
-            ]
-          },
-          "rustls-native-certs-0.8.4": {
-            "runtime_dependencies": [
-              {
-                "name": "openssl_probe",
-                "package_key": "openssl-probe-0.2.1",
-                "kind": "normal",
-                "features": [],
-                "uses_default_features": true,
-                "optional": false,
-                "target": "cfg(all(unix, not(target_os = \"macos\")))",
-                "tree": "target"
-              },
-              {
-                "name": "pki_types",
-                "package_key": "rustls-pki-types-1.14.0",
-                "kind": "normal",
-                "features": [],
+                "features": [
+                  "std"
+                ],
                 "uses_default_features": true,
                 "optional": false,
                 "target": null,
@@ -11648,8 +11700,14 @@
     "constant_time_eq-0.4.2": {
       "edition": "2024"
     },
-    "convergence-trait-0.1.0": {
+    "convergence-trait-0.1.0-d9f50bb653c220f2029dabf778846b3beb2708b3": {
       "edition": "2024"
+    },
+    "core-foundation-0.10.1": {
+      "edition": "2021"
+    },
+    "core-foundation-sys-0.8.7": {
+      "edition": "2018"
     },
     "cpufeatures-0.2.17": {
       "edition": "2018"
@@ -11728,14 +11786,14 @@
     "futures-util-0.3.32": {
       "edition": "2018"
     },
-    "gen-macros-0.1.9": {
+    "gen-macros-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": {
       "edition": "2024",
       "proc_macro": true
     },
-    "gen-platform-0.1.9": {
+    "gen-platform-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": {
       "edition": "2024"
     },
-    "gen-types-0.1.9": {
+    "gen-types-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": {
       "edition": "2024"
     },
     "generic-array-0.14.7": {
@@ -12037,6 +12095,12 @@
     "sct-0.7.1": {
       "edition": "2021"
     },
+    "security-framework-3.7.0": {
+      "edition": "2024"
+    },
+    "security-framework-sys-2.17.0": {
+      "edition": "2021"
+    },
     "seibi-0.2.0": {
       "edition": "2024",
       "binaries": [
@@ -12084,25 +12148,25 @@
     "sharded-slab-0.1.7": {
       "edition": "2018"
     },
-    "shigoto-budget-0.1.5": {
+    "shigoto-budget-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
       "edition": "2024"
     },
-    "shigoto-dag-0.1.5": {
+    "shigoto-dag-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
       "edition": "2024"
     },
-    "shigoto-emit-0.1.5": {
+    "shigoto-emit-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
       "edition": "2024"
     },
-    "shigoto-gate-0.1.5": {
+    "shigoto-gate-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
       "edition": "2024"
     },
-    "shigoto-retry-0.1.5": {
+    "shigoto-retry-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
       "edition": "2024"
     },
-    "shigoto-scheduler-0.1.5": {
+    "shigoto-scheduler-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
       "edition": "2024"
     },
-    "shigoto-types-0.1.5": {
+    "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": {
       "edition": "2024"
     },
     "shlex-1.3.0": {
@@ -12221,7 +12285,7 @@
     "try-lock-0.2.5": {
       "edition": "2015"
     },
-    "tsunagu-0.1.1": {
+    "tsunagu-0.1.1-64c06a1ff895409209d626db3469181bb24f9afd": {
       "edition": "2024"
     },
     "typenum-1.20.1": {
@@ -12316,33 +12380,21 @@
     "zmij-1.0.21": {
       "edition": "2021",
       "build_script": "build.rs"
-    },
-    "core-foundation-0.10.1": {
-      "edition": "2021"
-    },
-    "core-foundation-sys-0.8.7": {
-      "edition": "2018"
-    },
-    "security-framework-3.7.0": {
-      "edition": "2024"
-    },
-    "security-framework-sys-2.17.0": {
-      "edition": "2021"
     }
   },
   "git_nar_sha256": {
-    "convergence-trait-0.1.0": "sha256-ksfUKMH81VwUQP6/71N63yki98mQloPB1eAeMr3vVqE=",
-    "gen-macros-0.1.9": "sha256-KkZmHxQBwz3Q4XNaJVLdl6TLLPiR+erMbGOrrvPRE0A=",
-    "gen-platform-0.1.9": "sha256-KkZmHxQBwz3Q4XNaJVLdl6TLLPiR+erMbGOrrvPRE0A=",
-    "gen-types-0.1.9": "sha256-KkZmHxQBwz3Q4XNaJVLdl6TLLPiR+erMbGOrrvPRE0A=",
-    "shigoto-budget-0.1.5": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
-    "shigoto-dag-0.1.5": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
-    "shigoto-emit-0.1.5": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
-    "shigoto-gate-0.1.5": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
-    "shigoto-retry-0.1.5": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
-    "shigoto-scheduler-0.1.5": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
-    "shigoto-types-0.1.5": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
-    "tsunagu-0.1.1": "sha256-CqyCfnCRmRn5ivDJFDADY4bqkyF6wGsgABD+U/qwXy0="
+    "convergence-trait-0.1.0-d9f50bb653c220f2029dabf778846b3beb2708b3": "sha256-ksfUKMH81VwUQP6/71N63yki98mQloPB1eAeMr3vVqE=",
+    "gen-macros-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": "sha256-KkZmHxQBwz3Q4XNaJVLdl6TLLPiR+erMbGOrrvPRE0A=",
+    "gen-platform-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": "sha256-KkZmHxQBwz3Q4XNaJVLdl6TLLPiR+erMbGOrrvPRE0A=",
+    "gen-types-0.1.9-6d82c9d3885c781e923ec46330d05d7eca469a3b": "sha256-KkZmHxQBwz3Q4XNaJVLdl6TLLPiR+erMbGOrrvPRE0A=",
+    "shigoto-budget-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
+    "shigoto-dag-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
+    "shigoto-emit-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
+    "shigoto-gate-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
+    "shigoto-retry-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
+    "shigoto-scheduler-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
+    "shigoto-types-0.1.5-fb75042456a2ac00a37c6f0f7312ca1128b96b23": "sha256-JUa66Hotc8dOwwlFFcWuQ9lt/7Z4J9K7o22GsOi1lAE=",
+    "tsunagu-0.1.1-64c06a1ff895409209d626db3469181bb24f9afd": "sha256-CqyCfnCRmRn5ivDJFDADY4bqkyF6wGsgABD+U/qwXy0="
   },
   "flake_metadata": {}
 }

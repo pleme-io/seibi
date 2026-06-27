@@ -2004,6 +2004,7 @@ dependencies = [
  "sha2",
  "shigoto-dag",
  "shigoto-emit",
+ "shigoto-gate",
  "shigoto-retry",
  "shigoto-scheduler",
  "shigoto-types",

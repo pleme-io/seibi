@@ -47,6 +47,10 @@ shigoto-scheduler = { git = "https://github.com/pleme-io/shigoto" }
 shigoto-dag = { git = "https://github.com/pleme-io/shigoto" }
 shigoto-retry = { git = "https://github.com/pleme-io/shigoto" }
 shigoto-emit = { git = "https://github.com/pleme-io/shigoto" }
+# bootstrap orchestrator: a custom AllUpstreamsSucceeded Gate so a failed
+# upstream skips its descendants (the implicit AllUpstreamsTerminal proceeds
+# past a Deadlettered upstream — wrong for a bootstrap chain).
+shigoto-gate = { git = "https://github.com/pleme-io/shigoto" }
 convergence-trait = { git = "https://github.com/pleme-io/convergence-trait" }
 async-trait = "0.1"
 blake3 = "1"
