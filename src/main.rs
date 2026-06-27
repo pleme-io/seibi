@@ -109,7 +109,7 @@ enum Command {
     /// Idempotent cluster bootstrap — one shigoto Dag (ensure-secrets →
     /// seed-ssm → verify-seed → declare/observe). Deterministic secrets
     /// (SOPS→SSM, read-back drift gate); cluster+flux are declare-and-observe
-    /// (the pangea-operator plans/applies). `--dry-run` plans without writing.
+    /// (read-only via --observe-context). `--mode apply|plan|status`.
     Bootstrap(bootstrap::Args),
     /// Deploy a secret file with correct permissions and ownership
     DeploySecret(deploy_secret::Args),

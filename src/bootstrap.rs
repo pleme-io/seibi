@@ -117,6 +117,20 @@ impl BootstrapError {
     }
 }
 
+/// What `seibi bootstrap` does to the SECRETS plane. The cluster apply itself
+/// is ALWAYS cost-gated and is never triggered here, regardless of mode.
+/// Observation (declare/observe steps) runs read-only in every mode.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default, clap::ValueEnum)]
+enum Mode {
+    /// Seed SOPS→SSM (idempotent writes), verify as a HARD drift gate, observe.
+    #[default]
+    Apply,
+    /// No writes: seed reports what WOULD change, verify is advisory, observe.
+    Plan,
+    /// Pure read-only: do not seed; verify SSM==SOPS (read-back), observe.
+    Status,
+}
+
 // ── Gate: every upstream SUCCEEDED (not merely terminal) ─────────────
 
 /// Refuses (Skip) a job whose any direct DAG predecessor did not reach
@@ -223,7 +237,7 @@ impl RecordingJob for EnsureSecretsJob {
 struct SeedSsmJob {
     cfg: Arc<SsmConfig>,
     client: aws_sdk_ssm::Client,
-    dry_run: bool,
+    mode: Mode,
     ledger: Ledger,
 }
 
@@ -244,7 +258,18 @@ impl RecordingJob for SeedSsmJob {
     }
 
     async fn execute_body(&self) -> Result<(), BootstrapError> {
-        let summary = match ssm_bootstrap::seed(&self.cfg, &self.client, self.dry_run).await {
+        // Status mode is pure read-only — seeding is not evaluated at all.
+        if self.mode == Mode::Status {
+            record(
+                &self.ledger,
+                Self::KIND,
+                StepOutcome::Converged,
+                "status mode: seed not evaluated (read-only)".to_string(),
+            );
+            return Ok(());
+        }
+        let dry = self.mode == Mode::Plan;
+        let summary = match ssm_bootstrap::seed(&self.cfg, &self.client, dry).await {
             Ok(s) => s,
             Err(e) => {
                 record(&self.ledger, Self::KIND, StepOutcome::Failed, e.to_string());
@@ -265,7 +290,7 @@ impl RecordingJob for SeedSsmJob {
         } else {
             StepOutcome::Applied
         };
-        let prefix = if self.dry_run { "DRY-RUN: " } else { "" };
+        let prefix = if dry { "PLAN: would " } else { "" };
         let detail = format!(
             "{}{} written, {} unchanged",
             prefix,
@@ -278,12 +303,12 @@ impl RecordingJob for SeedSsmJob {
 }
 
 /// `verify-seed` — read each SecureString back and assert it equals SOPS. In
-/// apply mode this is the hard determinism gate (drift → fail). In dry-run it
-/// is advisory (reports what would change; never fails the plan).
+/// apply mode this is the hard determinism gate (drift → fail). In plan/status
+/// it is advisory (reports drift; never fails the run).
 struct VerifySeedJob {
     cfg: Arc<SsmConfig>,
     client: aws_sdk_ssm::Client,
-    dry_run: bool,
+    mode: Mode,
     ledger: Ledger,
 }
 
@@ -311,11 +336,12 @@ impl RecordingJob for VerifySeedJob {
                 return Err(BootstrapError::step(Self::KIND, e.to_string()));
             }
         };
-        if self.dry_run {
+        // Hard determinism gate only in apply mode; advisory in plan/status.
+        if self.mode != Mode::Apply {
             let detail = if v.drift.is_empty() {
-                format!("{} secrets already match SOPS (would stay converged)", v.verified.len())
+                format!("{} secrets match SOPS", v.verified.len())
             } else {
-                format!("{} match, {} would change on apply", v.verified.len(), v.drift.len())
+                format!("{} match SOPS, {} differ", v.verified.len(), v.drift.len())
             };
             record(&self.ledger, Self::KIND, StepOutcome::Deferred, detail);
             return Ok(());
@@ -440,9 +466,26 @@ fn reconcile_report(it: &serde_json::Value) -> (StepOutcome, String) {
         .and_then(|s| s.get("approvedPlanHash"))
         .and_then(serde_json::Value::as_str);
 
+    // status.lastCycle.summary — the typed per-resource reconcile receipt.
+    let summary = status
+        .and_then(|s| s.get("lastCycle"))
+        .and_then(|c| c.get("summary"));
+    let summary_u64 = |k: &str| summary.and_then(|s| s.get(k)).and_then(serde_json::Value::as_u64);
+    let matched = summary_u64("matched");
+    let updated = summary_u64("updated");
+    let drifted = summary_u64("driftedUncorrected");
+
     let mut bits = vec![format!("phase={phase}")];
     if let Some(c) = cycles {
         bits.push(format!("cycles={c}"));
+    }
+    if matched.or(updated).or(drifted).is_some() {
+        bits.push(format!(
+            "lastCycle[matched={}, updated={}, drifted={}]",
+            matched.unwrap_or(0),
+            updated.unwrap_or(0),
+            drifted.unwrap_or(0)
+        ));
     }
     if let Some(p) = pending {
         if Some(p) != approved {
@@ -454,7 +497,9 @@ fn reconcile_report(it: &serde_json::Value) -> (StepOutcome, String) {
     if let Some(e) = last_error {
         bits.push(format!("lastError={e}"));
     }
-    let healthy = phase.eq_ignore_ascii_case("ready") && last_error.is_none();
+    // Healthy = Ready, no error, and nothing left drifted-uncorrected.
+    let healthy =
+        phase.eq_ignore_ascii_case("ready") && last_error.is_none() && drifted.unwrap_or(0) == 0;
     let outcome = if healthy {
         StepOutcome::Converged
     } else {
@@ -650,10 +695,12 @@ pub struct Args {
     #[arg(long, env = "SOPS_AGE_KEY_FILE")]
     age_key_file: Option<PathBuf>,
 
-    /// Plan only: seed writes are skipped (verify reads back what is live),
-    /// and the declare/observe steps stay deferred. Nothing in AWS is mutated.
-    #[arg(long)]
-    dry_run: bool,
+    /// What to do with the secrets plane: `apply` (seed SSM; verify is a HARD
+    /// drift gate) | `plan` (no writes; show what would change) | `status`
+    /// (pure read-only: verify SSM==SOPS + observe). Observe runs in every mode.
+    /// The cluster apply is ALWAYS cost-gated and is never triggered here.
+    #[arg(long, value_enum, default_value_t = Mode::Apply)]
+    mode: Mode,
 
     /// Append every shigoto transition as a JSONL line to this path (the
     /// resumable audit trail; `jq`-readable like every other seibi audit log).
@@ -703,7 +750,7 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         cluster = %cfg.cluster,
         prefix = %cfg.prefix,
         region = %cfg.region,
-        dry_run = args.dry_run,
+        mode = ?args.mode,
         "seibi bootstrap: driving the cluster bootstrap Dag"
     );
 
@@ -764,13 +811,13 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     let seed = Arc::new(SeedSsmJob {
         cfg: cfg.clone(),
         client: client.clone(),
-        dry_run: args.dry_run,
+        mode: args.mode,
         ledger: ledger.clone(),
     });
     let verify = Arc::new(VerifySeedJob {
         cfg: cfg.clone(),
         client: client.clone(),
-        dry_run: args.dry_run,
+        mode: args.mode,
         ledger: ledger.clone(),
     });
     let declare = Arc::new(DeclareClusterJob {
@@ -882,16 +929,18 @@ pub async fn run(args: Args) -> Result<ExitCode> {
         return Ok(ExitCode::FAILURE);
     }
 
-    let verdict = if any_applied {
-        "bootstrapped (changes applied)"
-    } else {
-        "AlreadyReady (no changes)"
+    let verdict = match args.mode {
+        Mode::Status => "status (read-only — no seeding evaluated)",
+        Mode::Plan if any_applied => "plan: changes pending (run with --mode apply to converge)",
+        Mode::Plan => "plan: already converged (no changes)",
+        Mode::Apply if any_applied => "bootstrapped (changes applied)",
+        Mode::Apply => "AlreadyReady (no changes)",
     };
     info!(
         cluster = %cfg.cluster,
-        dry_run = args.dry_run,
+        mode = ?args.mode,
         secrets = verdict,
-        "secrets plane converged; cluster+flux deferred to the pangea-operator (declare+observe)"
+        "secrets plane evaluated; cluster+flux observed read-only (declare+observe; never apply)"
     );
     Ok(ExitCode::SUCCESS)
 }
@@ -1025,5 +1074,29 @@ mod tests {
         assert!(d.contains("Ready=False"), "{d}");
 
         assert_eq!(flux_report(&serde_json::json!({ "status": {} })).0, StepOutcome::Deferred);
+    }
+
+    #[test]
+    fn reconcile_report_surfaces_lastcycle_summary_and_drift() {
+        let with_summary = serde_json::json!({
+            "status": {
+                "phase": "Ready",
+                "lastCycle": { "summary": { "matched": 40, "updated": 2, "driftedUncorrected": 0 } }
+            }
+        });
+        let (o, d) = reconcile_report(&with_summary);
+        assert_eq!(o, StepOutcome::Converged);
+        assert!(d.contains("lastCycle[matched=40, updated=2, drifted=0]"), "{d}");
+
+        // driftedUncorrected > 0 → not healthy even when phase=Ready.
+        let drifted = serde_json::json!({
+            "status": { "phase": "Ready", "lastCycle": { "summary": { "driftedUncorrected": 3 } } }
+        });
+        assert_eq!(reconcile_report(&drifted).0, StepOutcome::Deferred);
+    }
+
+    #[test]
+    fn mode_defaults_to_apply() {
+        assert_eq!(Mode::default(), Mode::Apply);
     }
 }
