@@ -380,7 +380,11 @@ async fn kubectl_get_json(
     if let Some(ctx) = context {
         cmd.args(["--context", ctx]);
     }
-    cmd.arg("get").args(args).args(["-o", "json"]);
+    // --request-timeout bounds an unreachable API server so observe degrades
+    // fast (to the pointer) instead of hanging on a TCP dial timeout.
+    cmd.arg("get")
+        .args(args)
+        .args(["-o", "json", "--request-timeout=8s"]);
     let out = cmd
         .output()
         .await
@@ -393,6 +397,31 @@ async fn kubectl_get_json(
         ));
     }
     serde_json::from_slice(&out.stdout).map_err(|e| format!("parse kubectl json: {e}"))
+}
+
+/// One observe step: with a context, do the live read-only `kubectl get` and
+/// interpret it; without one, record the MCP pointer immediately (no kubectl —
+/// the workstation's default context is the wrong cluster for a rio-only CRD,
+/// and an unreachable one would hang). Observation never fails the bootstrap.
+async fn observe_step(
+    ledger: &Ledger,
+    kind: &'static str,
+    context: Option<&str>,
+    args: &[&str],
+    pointer: String,
+    interpret: impl Fn(&serde_json::Value) -> (StepOutcome, String),
+) {
+    let Some(ctx) = context else {
+        record(ledger, kind, StepOutcome::Deferred, pointer);
+        return;
+    };
+    match kubectl_get_json(Some(ctx), args).await {
+        Ok(json) => {
+            let (o, d) = interpret(&json);
+            record(ledger, kind, o, d);
+        }
+        Err(e) => record(ledger, kind, StepOutcome::Deferred, format!("{pointer} (kubectl: {e})")),
+    }
 }
 
 /// The `status.conditions[type==Ready]` (status, message), if present.
@@ -558,20 +587,18 @@ impl RecordingJob for DeclareClusterJob {
     async fn execute_body(&self) -> Result<(), BootstrapError> {
         let c = self.cfg.cluster.as_str();
         let args = ["infrastructuretemplate.pangea.pleme.io", c, "-n", c];
-        match kubectl_get_json(self.observe_context.as_deref(), &args).await {
-            Ok(it) => {
-                let (o, d) = declaration_report(&it);
-                record(&self.ledger, Self::KIND, o, d);
-            }
-            Err(e) => record(
-                &self.ledger,
-                Self::KIND,
-                StepOutcome::Deferred,
-                format!(
-                    "InfrastructureTemplate {c}/{c} not observed — pass --observe-context (rio access) or query via grafana-rio/engenho MCP: {e}"
-                ),
-            ),
-        }
+        let pointer = format!(
+            "InfrastructureTemplate {c}/{c} — pass --observe-context (rio access) or observe via grafana-rio/engenho MCP"
+        );
+        observe_step(
+            &self.ledger,
+            Self::KIND,
+            self.observe_context.as_deref(),
+            &args,
+            pointer,
+            declaration_report,
+        )
+        .await;
         Ok(())
     }
 }
@@ -602,20 +629,18 @@ impl RecordingJob for ObserveClusterJob {
     async fn execute_body(&self) -> Result<(), BootstrapError> {
         let c = self.cfg.cluster.as_str();
         let args = ["infrastructuretemplate.pangea.pleme.io", c, "-n", c];
-        match kubectl_get_json(self.observe_context.as_deref(), &args).await {
-            Ok(it) => {
-                let (o, d) = reconcile_report(&it);
-                record(&self.ledger, Self::KIND, o, d);
-            }
-            Err(e) => record(
-                &self.ledger,
-                Self::KIND,
-                StepOutcome::Deferred,
-                format!(
-                    "reconcile status for {c} not observed — pass --observe-context (rio access) or query status.lastCycle via grafana-rio/engenho MCP: {e}"
-                ),
-            ),
-        }
+        let pointer = format!(
+            "reconcile status for {c} — pass --observe-context (rio access) or query status.lastCycle via grafana-rio/engenho MCP"
+        );
+        observe_step(
+            &self.ledger,
+            Self::KIND,
+            self.observe_context.as_deref(),
+            &args,
+            pointer,
+            reconcile_report,
+        )
+        .await;
         Ok(())
     }
 }
@@ -652,20 +677,18 @@ impl RecordingJob for ObserveFluxJob {
             "-n",
             "flux-system",
         ];
-        match kubectl_get_json(self.observe_context.as_deref(), &args).await {
-            Ok(k) => {
-                let (o, d) = flux_report(&k);
-                record(&self.ledger, Self::KIND, o, d);
-            }
-            Err(e) => record(
-                &self.ledger,
-                Self::KIND,
-                StepOutcome::Deferred,
-                format!(
-                    "Flux Kustomization {ks}/flux-system not observed — pass --observe-context (rio access) or query via grafana-rio MCP: {e}"
-                ),
-            ),
-        }
+        let pointer = format!(
+            "Flux Kustomization {ks}/flux-system — pass --observe-context (rio access) or observe via grafana-rio MCP"
+        );
+        observe_step(
+            &self.ledger,
+            Self::KIND,
+            self.observe_context.as_deref(),
+            &args,
+            pointer,
+            flux_report,
+        )
+        .await;
         Ok(())
     }
 }
