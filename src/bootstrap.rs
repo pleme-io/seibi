@@ -11,10 +11,15 @@
 //! source of truth, projected to SSM SecureString and read back to prove no
 //! drift, so cluster ups/downs reproduce the SAME identity. The cluster/flux
 //! plane is declare-and-observe (★★ PLATFORM-MEDIATED): seibi NEVER plans or
-//! applies — those steps report a typed `Deferred` outcome naming the GitOps
-//! action (commit `spec.suspend:false` on the InfrastructureTemplate; observe
-//! via the rio pangea-operator) until cross-cluster access is wired (M2). They
-//! are typed-Deferred — never a silent Ok, never a panic (★★ TYPED-SPEC).
+//! applies, and never flips the `spec.suspend` cost gate. With `--observe-context`
+//! (a kubectl context with operator/flux access, e.g. rio) the declare/observe
+//! steps do a read-only `kubectl get` of the live InfrastructureTemplate +
+//! FluxCD Kustomization and REPORT the declared state, the suspend cost gate,
+//! the reconcile status (phase/pendingPlanHash/lastError), and Flux readiness.
+//! Without a reachable context they degrade to a precise pointer (observe via
+//! the grafana-rio / engenho MCP — the agent's surface). Observation never
+//! fails the bootstrap: the secrets plane is the critical path; observe steps
+//! always succeed, carrying the live state (or the pointer) in the receipt.
 //!
 //! A custom [`AllUpstreamsSucceeded`] gate makes a downstream step terminal-
 //! `Skipped` when any upstream did not succeed — so a failed seed can never let
@@ -330,67 +335,295 @@ impl RecordingJob for VerifySeedJob {
     }
 }
 
-/// Macro for the declare-and-observe steps: each is a typed `Deferred` no-op
-/// that names the GitOps action it stands for. seibi declares + observes; it
-/// never plans or applies (★★ PLATFORM-MEDIATED). The body is computed from the
-/// cluster so the receipt is concrete.
-macro_rules! deferred_job {
-    ($name:ident, $kind:literal, $detail:expr) => {
-        struct $name {
-            cfg: Arc<SsmConfig>,
-            ledger: Ledger,
-        }
+// ── Cluster + Flux observation (read-only; declare+observe, never apply) ──
+//
+// The operator/flux host (rio) is reached via `--observe-context`. Without a
+// reachable context the steps degrade to a precise pointer (observe via the
+// grafana-rio / engenho / kubernetes MCP — ★★ PLATFORM-MEDIATED, the agent's
+// surface). seibi NEVER flips the suspend cost gate; the declare step only
+// REPORTS it. Each observe is a `kubectl get -o json` (seibi's k8s idiom) fed
+// to a PURE interpreter (tested with mock JSON — the side-effect/interpret
+// split keeps the logic verifiable without a live cluster).
 
-        #[async_trait::async_trait]
-        impl RecordingJob for $name {
-            type Output = ();
-            type Error = BootstrapError;
-            const KIND: &'static str = $kind;
-
-            fn scope(&self) -> JobScope {
-                JobScope::Global
-            }
-            fn subject(&self) -> JobSubject {
-                JobSubject::Pinned(self.cfg.cluster.clone())
-            }
-            fn output_sink(&self) -> Option<&Arc<dyn OutputSink<Self::Output>>> {
-                None
-            }
-
-            async fn execute_body(&self) -> Result<(), BootstrapError> {
-                // Bind the (non-capturing) closure to a fn pointer first, then
-                // call it — calling the closure literal inline parses the trailing
-                // args as part of the closure body (E0618).
-                let make: fn(&str) -> String = $detail;
-                let detail = make(self.cfg.cluster.as_str());
-                record(&self.ledger, Self::KIND, StepOutcome::Deferred, detail);
-                Ok(())
-            }
-        }
-    };
+/// `kubectl [--context X] get <args> -o json` → parsed JSON. Read-only.
+async fn kubectl_get_json(
+    context: Option<&str>,
+    args: &[&str],
+) -> Result<serde_json::Value, String> {
+    let mut cmd = tokio::process::Command::new("kubectl");
+    if let Some(ctx) = context {
+        cmd.args(["--context", ctx]);
+    }
+    cmd.arg("get").args(args).args(["-o", "json"]);
+    let out = cmd
+        .output()
+        .await
+        .map_err(|e| format!("kubectl spawn failed (is kubectl on PATH?): {e}"))?;
+    if !out.status.success() {
+        return Err(format!(
+            "kubectl get {}: {}",
+            args.join(" "),
+            String::from_utf8_lossy(&out.stderr).trim()
+        ));
+    }
+    serde_json::from_slice(&out.stdout).map_err(|e| format!("parse kubectl json: {e}"))
 }
 
-deferred_job!(
-    DeclareClusterJob,
-    "bootstrap.declare-cluster",
-    |cluster: &str| format!(
-        "declare: commit spec.suspend=false on the InfrastructureTemplate for {cluster}; the rio pangea-operator plans+applies via magma (seibi never plans/applies)"
-    )
-);
-deferred_job!(
-    ObserveClusterJob,
-    "bootstrap.observe-cluster",
-    |cluster: &str| format!(
-        "observe: InfrastructureTemplate status.lastCycle for {cluster} via the rio operator / grafana-rio MCP (cross-cluster; M2)"
-    )
-);
-deferred_job!(
-    ObserveFluxJob,
-    "bootstrap.observe-flux",
-    |cluster: &str| format!(
-        "observe: the downstream FluxCD reconcile for {cluster} (cross-cluster; M2)"
-    )
-);
+/// The `status.conditions[type==Ready]` (status, message), if present.
+fn ready_condition(obj: &serde_json::Value) -> Option<(String, String)> {
+    obj.get("status")?
+        .get("conditions")?
+        .as_array()?
+        .iter()
+        .find(|c| c.get("type").and_then(serde_json::Value::as_str) == Some("Ready"))
+        .map(|c| {
+            (
+                c.get("status")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("Unknown")
+                    .to_string(),
+                c.get("message")
+                    .and_then(serde_json::Value::as_str)
+                    .unwrap_or("")
+                    .to_string(),
+            )
+        })
+}
+
+/// Interpret the InfrastructureTemplate's DECLARED state — the cost gate.
+/// Read-only: reports whether the cluster is declared + suspended; NEVER flips
+/// `spec.suspend` (the apply trigger is the operator's gated commit).
+fn declaration_report(it: &serde_json::Value) -> (StepOutcome, String) {
+    let spec = it.get("spec");
+    let suspend = spec
+        .and_then(|s| s.get("suspend"))
+        .and_then(serde_json::Value::as_bool)
+        .unwrap_or(false);
+    let decision = spec
+        .and_then(|s| s.get("defaultDecision"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("autoApply");
+    if suspend {
+        (
+            StepOutcome::Deferred,
+            format!(
+                "declared, SUSPENDED (cost gate; defaultDecision={decision}); to apply: commit spec.suspend=false (and approve the pending plan)"
+            ),
+        )
+    } else {
+        (
+            StepOutcome::Converged,
+            format!("declared + active (defaultDecision={decision})"),
+        )
+    }
+}
+
+/// Interpret the InfrastructureTemplate's live RECONCILE status.
+fn reconcile_report(it: &serde_json::Value) -> (StepOutcome, String) {
+    let status = it.get("status");
+    let phase = status
+        .and_then(|s| s.get("phase"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("unknown")
+        .to_string();
+    let last_error = status
+        .and_then(|s| s.get("lastError"))
+        .and_then(serde_json::Value::as_str);
+    let cycles = status
+        .and_then(|s| s.get("cycleCount"))
+        .and_then(serde_json::Value::as_u64);
+    let pending = status
+        .and_then(|s| s.get("pendingPlanHash"))
+        .and_then(serde_json::Value::as_str)
+        .filter(|h| !h.is_empty());
+    let approved = status
+        .and_then(|s| s.get("approvedPlanHash"))
+        .and_then(serde_json::Value::as_str);
+
+    let mut bits = vec![format!("phase={phase}")];
+    if let Some(c) = cycles {
+        bits.push(format!("cycles={c}"));
+    }
+    if let Some(p) = pending {
+        if Some(p) != approved {
+            bits.push(format!(
+                "pendingPlan={p} AWAITING approval (set approvedPlanHash to apply)"
+            ));
+        }
+    }
+    if let Some(e) = last_error {
+        bits.push(format!("lastError={e}"));
+    }
+    let healthy = phase.eq_ignore_ascii_case("ready") && last_error.is_none();
+    let outcome = if healthy {
+        StepOutcome::Converged
+    } else {
+        StepOutcome::Deferred
+    };
+    (outcome, bits.join("; "))
+}
+
+/// Interpret the FluxCD Kustomization Ready condition.
+fn flux_report(ks: &serde_json::Value) -> (StepOutcome, String) {
+    let rev = ks
+        .get("status")
+        .and_then(|s| s.get("lastAppliedRevision"))
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or("none");
+    match ready_condition(ks) {
+        Some((status, msg)) if status == "True" => (
+            StepOutcome::Converged,
+            format!("Flux Ready=True (rev={rev}): {msg}"),
+        ),
+        Some((status, msg)) => (
+            StepOutcome::Deferred,
+            format!("Flux Ready={status} (rev={rev}): {msg}"),
+        ),
+        None => (
+            StepOutcome::Deferred,
+            format!("Flux Ready condition absent (rev={rev})"),
+        ),
+    }
+}
+
+/// `declare-cluster` — read the InfrastructureTemplate and REPORT its declared
+/// state + the suspend cost gate. Never mutates.
+struct DeclareClusterJob {
+    cfg: Arc<SsmConfig>,
+    observe_context: Option<String>,
+    ledger: Ledger,
+}
+
+#[async_trait::async_trait]
+impl RecordingJob for DeclareClusterJob {
+    type Output = ();
+    type Error = BootstrapError;
+    const KIND: &'static str = "bootstrap.declare-cluster";
+
+    fn scope(&self) -> JobScope {
+        JobScope::Global
+    }
+    fn subject(&self) -> JobSubject {
+        JobSubject::Pinned(self.cfg.cluster.clone())
+    }
+    fn output_sink(&self) -> Option<&Arc<dyn OutputSink<Self::Output>>> {
+        None
+    }
+
+    async fn execute_body(&self) -> Result<(), BootstrapError> {
+        let c = self.cfg.cluster.as_str();
+        let args = ["infrastructuretemplate.pangea.pleme.io", c, "-n", c];
+        match kubectl_get_json(self.observe_context.as_deref(), &args).await {
+            Ok(it) => {
+                let (o, d) = declaration_report(&it);
+                record(&self.ledger, Self::KIND, o, d);
+            }
+            Err(e) => record(
+                &self.ledger,
+                Self::KIND,
+                StepOutcome::Deferred,
+                format!(
+                    "InfrastructureTemplate {c}/{c} not observed — pass --observe-context (rio access) or query via grafana-rio/engenho MCP: {e}"
+                ),
+            ),
+        }
+        Ok(())
+    }
+}
+
+/// `observe-cluster` — read the InfrastructureTemplate's live reconcile status.
+struct ObserveClusterJob {
+    cfg: Arc<SsmConfig>,
+    observe_context: Option<String>,
+    ledger: Ledger,
+}
+
+#[async_trait::async_trait]
+impl RecordingJob for ObserveClusterJob {
+    type Output = ();
+    type Error = BootstrapError;
+    const KIND: &'static str = "bootstrap.observe-cluster";
+
+    fn scope(&self) -> JobScope {
+        JobScope::Global
+    }
+    fn subject(&self) -> JobSubject {
+        JobSubject::Pinned(self.cfg.cluster.clone())
+    }
+    fn output_sink(&self) -> Option<&Arc<dyn OutputSink<Self::Output>>> {
+        None
+    }
+
+    async fn execute_body(&self) -> Result<(), BootstrapError> {
+        let c = self.cfg.cluster.as_str();
+        let args = ["infrastructuretemplate.pangea.pleme.io", c, "-n", c];
+        match kubectl_get_json(self.observe_context.as_deref(), &args).await {
+            Ok(it) => {
+                let (o, d) = reconcile_report(&it);
+                record(&self.ledger, Self::KIND, o, d);
+            }
+            Err(e) => record(
+                &self.ledger,
+                Self::KIND,
+                StepOutcome::Deferred,
+                format!(
+                    "reconcile status for {c} not observed — pass --observe-context (rio access) or query status.lastCycle via grafana-rio/engenho MCP: {e}"
+                ),
+            ),
+        }
+        Ok(())
+    }
+}
+
+/// `observe-flux` — read the downstream FluxCD Kustomization Ready condition.
+struct ObserveFluxJob {
+    cfg: Arc<SsmConfig>,
+    observe_context: Option<String>,
+    ledger: Ledger,
+}
+
+#[async_trait::async_trait]
+impl RecordingJob for ObserveFluxJob {
+    type Output = ();
+    type Error = BootstrapError;
+    const KIND: &'static str = "bootstrap.observe-flux";
+
+    fn scope(&self) -> JobScope {
+        JobScope::Global
+    }
+    fn subject(&self) -> JobSubject {
+        JobSubject::Pinned(self.cfg.cluster.clone())
+    }
+    fn output_sink(&self) -> Option<&Arc<dyn OutputSink<Self::Output>>> {
+        None
+    }
+
+    async fn execute_body(&self) -> Result<(), BootstrapError> {
+        let c = self.cfg.cluster.as_str();
+        let ks = format!("workloads-{c}");
+        let args = [
+            "kustomization.kustomize.toolkit.fluxcd.io",
+            ks.as_str(),
+            "-n",
+            "flux-system",
+        ];
+        match kubectl_get_json(self.observe_context.as_deref(), &args).await {
+            Ok(k) => {
+                let (o, d) = flux_report(&k);
+                record(&self.ledger, Self::KIND, o, d);
+            }
+            Err(e) => record(
+                &self.ledger,
+                Self::KIND,
+                StepOutcome::Deferred,
+                format!(
+                    "Flux Kustomization {ks}/flux-system not observed — pass --observe-context (rio access) or query via grafana-rio MCP: {e}"
+                ),
+            ),
+        }
+        Ok(())
+    }
+}
 
 // ── CLI ──────────────────────────────────────────────────────────────
 
@@ -426,6 +659,14 @@ pub struct Args {
     /// resumable audit trail; `jq`-readable like every other seibi audit log).
     #[arg(long)]
     audit_log: Option<PathBuf>,
+
+    /// kubectl context for the cluster that hosts the pangea-operator + FluxCD
+    /// (e.g. rio). When set, the declare/observe steps read the live
+    /// InfrastructureTemplate + Flux Kustomization (read-only). When absent (or
+    /// unreachable) they degrade to a precise pointer — observe via the
+    /// grafana-rio / engenho MCP instead. seibi never flips the suspend cost gate.
+    #[arg(long)]
+    observe_context: Option<String>,
 }
 
 pub async fn run(args: Args) -> Result<ExitCode> {
@@ -534,14 +775,17 @@ pub async fn run(args: Args) -> Result<ExitCode> {
     });
     let declare = Arc::new(DeclareClusterJob {
         cfg: cfg.clone(),
+        observe_context: args.observe_context.clone(),
         ledger: ledger.clone(),
     });
     let obs_cluster = Arc::new(ObserveClusterJob {
         cfg: cfg.clone(),
+        observe_context: args.observe_context.clone(),
         ledger: ledger.clone(),
     });
     let obs_flux = Arc::new(ObserveFluxJob {
         cfg: cfg.clone(),
+        observe_context: args.observe_context.clone(),
         ledger: ledger.clone(),
     });
 
@@ -723,5 +967,63 @@ mod tests {
         ];
         let unique: std::collections::HashSet<_> = ids.iter().collect();
         assert_eq!(unique.len(), 6, "each step must have a distinct JobId");
+    }
+
+    #[test]
+    fn declaration_report_flags_the_suspend_cost_gate() {
+        let suspended = serde_json::json!({
+            "spec": { "suspend": true, "defaultDecision": "requireApproval" }
+        });
+        let (o, d) = declaration_report(&suspended);
+        assert_eq!(o, StepOutcome::Deferred);
+        assert!(d.contains("SUSPENDED"), "{d}");
+        assert!(d.contains("suspend=false"), "{d}");
+
+        let active = serde_json::json!({
+            "spec": { "suspend": false, "defaultDecision": "autoApply" }
+        });
+        assert_eq!(declaration_report(&active).0, StepOutcome::Converged);
+    }
+
+    #[test]
+    fn reconcile_report_classifies_phase_and_surfaces_error() {
+        let ready = serde_json::json!({ "status": { "phase": "Ready", "cycleCount": 7 } });
+        let (o, d) = reconcile_report(&ready);
+        assert_eq!(o, StepOutcome::Converged);
+        assert!(d.contains("phase=Ready"), "{d}");
+
+        let failed = serde_json::json!({ "status": { "phase": "Failed", "lastError": "boom" } });
+        let (o, d) = reconcile_report(&failed);
+        assert_eq!(o, StepOutcome::Deferred);
+        assert!(d.contains("lastError=boom"), "{d}");
+
+        let pending = serde_json::json!({
+            "status": { "phase": "Planning", "pendingPlanHash": "abc", "approvedPlanHash": "" }
+        });
+        let (o, d) = reconcile_report(&pending);
+        assert_eq!(o, StepOutcome::Deferred);
+        assert!(d.contains("AWAITING approval"), "{d}");
+    }
+
+    #[test]
+    fn flux_report_reads_the_ready_condition() {
+        let ready = serde_json::json!({
+            "status": {
+                "lastAppliedRevision": "main@sha1:abc",
+                "conditions": [{ "type": "Ready", "status": "True", "message": "applied" }]
+            }
+        });
+        let (o, d) = flux_report(&ready);
+        assert_eq!(o, StepOutcome::Converged);
+        assert!(d.contains("Ready=True"), "{d}");
+
+        let not_ready = serde_json::json!({
+            "status": { "conditions": [{ "type": "Ready", "status": "False", "message": "dep not ready" }] }
+        });
+        let (o, d) = flux_report(&not_ready);
+        assert_eq!(o, StepOutcome::Deferred);
+        assert!(d.contains("Ready=False"), "{d}");
+
+        assert_eq!(flux_report(&serde_json::json!({ "status": {} })).0, StepOutcome::Deferred);
     }
 }
